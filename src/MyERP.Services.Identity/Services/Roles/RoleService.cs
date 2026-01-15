@@ -1,6 +1,7 @@
 using MyERP.Services.Identity.DTOs.Roles;
 using MyERP.Services.Identity.Models;
 using MyERP.Services.Identity.Repositories;
+using MyERP.Services.Identity.Exceptions;
 
 namespace MyERP.Services.Identity.Services.Roles
 {
@@ -32,7 +33,7 @@ namespace MyERP.Services.Identity.Services.Roles
         public async Task<RoleDto> GetRoleByIdAsync(Guid roleId)
         {
             var r = await _userRepo.GetRoleByIdAsync(roleId);
-            if (r == null) throw new KeyNotFoundException("Role not found");
+            if (r == null) throw new NotFoundException("Role not found");
 
             return new RoleDto
             {
@@ -62,7 +63,7 @@ namespace MyERP.Services.Identity.Services.Roles
         public async Task UpdateRoleAsync(RoleDto request)
         {
             var role = await _userRepo.GetRoleByIdAsync(request.RoleId);
-            if (role == null) throw new KeyNotFoundException("Role not found");
+            if (role == null) throw new NotFoundException("Role not found");
 
             role.RoleName = request.RoleName;
             role.Description = request.Description;

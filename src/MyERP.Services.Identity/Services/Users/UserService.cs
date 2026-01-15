@@ -1,6 +1,7 @@
 using MyERP.Services.Identity.DTOs.Users;
 using MyERP.Services.Identity.Models;
 using MyERP.Services.Identity.Repositories;
+using MyERP.Services.Identity.Exceptions;
 
 namespace MyERP.Services.Identity.Services.Users
 {
@@ -32,7 +33,7 @@ namespace MyERP.Services.Identity.Services.Users
         public async Task<UserDto> GetUserByIdAsync(Guid userId)
         {
             var user = await _userRepo.GetByIdAsync(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            if (user == null) throw new NotFoundException("User not found");
 
             return new UserDto
             {
@@ -50,7 +51,7 @@ namespace MyERP.Services.Identity.Services.Users
         {
             // Reuse repository check
             if (await _userRepo.ExistsAsync(request.Email))
-                throw new Exception("Email already exists");
+                throw new AppException("Email already exists");
 
             var newUser = new User
             {
@@ -69,12 +70,12 @@ namespace MyERP.Services.Identity.Services.Users
         public async Task UpdateUserAsync(UpdateUserDto request)
         {
             var user = await _userRepo.GetByIdAsync(request.UserId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            if (user == null) throw new NotFoundException("User not found");
 
             if (!string.IsNullOrEmpty(request.Email) && request.Email != user.Email)
             {
                  if (await _userRepo.ExistsAsync(request.Email))
-                    throw new Exception("Email already exists");
+                    throw new AppException("Email already exists");
                  user.Email = request.Email;
             }
 

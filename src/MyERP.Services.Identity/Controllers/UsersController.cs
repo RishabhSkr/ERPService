@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Identity.DTOs.Users;
 using MyERP.Services.Identity.Services.Users;
+using MyERP.Services.Identity.Exceptions;
+using MyERP.Services.Identity.DTOs;
 
 namespace MyERP.Services.Identity.Controllers
 {
@@ -18,7 +20,6 @@ namespace MyERP.Services.Identity.Controllers
         }
 
         [HttpGet]
-        // [Authorize(Policy = "AdminOnly")] - Add policies later
         public async Task<IActionResult> GetAll()
         {
             var users = await _userService.GetAllUsersAsync();
@@ -28,56 +29,31 @@ namespace MyERP.Services.Identity.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            try
-            {
-                var user = await _userService.GetUserByIdAsync(id);
-                return Ok(user);
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
+            var user = await _userService.GetUserByIdAsync(id);
+            return Ok(user);
         }
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateUserDto request)
         {
-            try
-            {
-                var userId = await _userService.CreateUserAsync(request);
-                return CreatedAtAction(nameof(GetById), new { id = userId }, new { UserId = userId });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            var userId = await _userService.CreateUserAsync(request);
+            return CreatedAtAction(nameof(GetById), new { id = userId }, new { UserId = userId });
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserDto request)
         {
-            if (id != request.UserId) return BadRequest("ID mismatch");
+            if (id != request.UserId) throw new AppException("ID mismatch");
 
-            try
-            {
-                await _userService.UpdateUserAsync(request);
-                return NoContent();
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            await _userService.UpdateUserAsync(request);
+            return Ok(ApiResponse.Ok("User updated successfully"));
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
             await _userService.DeleteUserAsync(id);
-            return NoContent();
+            return Ok(ApiResponse.Ok("User deleted successfully"));
         }
     }
 }

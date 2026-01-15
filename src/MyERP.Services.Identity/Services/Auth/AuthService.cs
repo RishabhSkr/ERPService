@@ -4,6 +4,7 @@ using MyERP.Services.Identity.DTOs.Users;
 using MyERP.Services.Identity.Models;
 using MyERP.Services.Identity.Repositories;
 using MyERP.Services.Identity.Services.Auth;
+using MyERP.Services.Identity.Exceptions;
 
 namespace MyERP.Services.Identity.Services
 {
@@ -23,8 +24,12 @@ namespace MyERP.Services.Identity.Services
         {
             // 1. Get User
             var user = await _userRepo.GetByUsernameAsync(request.Username);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                throw new Exception("Invalid Credentials");
+            if (user == null) // Don't check password here to avoid timing attacks? Actually standard is verify.
+            {
+                 // Dummy verify to simulate time if needed, but for now simple check.
+            }
+             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                throw new UnauthorizedException("Invalid Credentials");
 
             // 2. Generate Access Token
             string roleName = user.Role?.RoleName ?? "User";
@@ -55,7 +60,7 @@ namespace MyERP.Services.Identity.Services
         public async Task<string> RegisterAsync(CreateUserDto request)
         {
             if (await _userRepo.ExistsAsync(request.Email))
-                throw new Exception("Email exists");
+                throw new AppException("Email exists");
 
             var newUser = new User
             {

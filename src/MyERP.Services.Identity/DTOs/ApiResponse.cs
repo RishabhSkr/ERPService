@@ -3,7 +3,7 @@ namespace MyERP.Services.Identity.DTOs
     public class ApiResponse<T>
     {
         public bool Success { get; set; }
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
         public T? Data { get; set; }
         public int StatusCode { get; set; }
 
@@ -22,6 +22,7 @@ namespace MyERP.Services.Identity.DTOs
             return new ApiResponse<T>(false, message, default, statusCode);
         }
 
+
         public static ApiResponse<T> Ok(T data, string message = "Success")
         {
             return new ApiResponse<T>(true, message, data, 200);
@@ -33,12 +34,21 @@ namespace MyERP.Services.Identity.DTOs
     {
         public new static ApiResponse Fail(string message, int statusCode = 400)
         {
-            return new ApiResponse { Success = false, Message = message, Data = null, StatusCode = statusCode };
+            return new ApiResponse { 
+                Success = false, 
+                Message = message, 
+                Data = null, 
+                StatusCode = statusCode };
         }
         
         public static ApiResponse Ok(string message = "Success")
         {
-            return new ApiResponse { Success = true, Message = message, Data = null, StatusCode = 200 };
+            return new ApiResponse { 
+                Success = true, 
+                Message = message, 
+                Data = null, 
+                StatusCode = 200 };
         }
+
     }
 }

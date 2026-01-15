@@ -1,6 +1,7 @@
 using MyERP.Services.Identity.DTOs.Permissions;
 using MyERP.Services.Identity.Models;
 using MyERP.Services.Identity.Repositories;
+using MyERP.Services.Identity.Exceptions;
 
 namespace MyERP.Services.Identity.Services.Permissions
 {
@@ -56,7 +57,7 @@ namespace MyERP.Services.Identity.Services.Permissions
                 
                 // Let's use Remove + Add for Update for simplicity if Repo doesn't support Update.
                 // Actually, I'll allow duplicates check and just throw for now to keep it simple as per spec.
-                throw new InvalidOperationException("Permission already exists. Use update logic (not implemented yet) or delete first.");
+                throw new AppException("Permission already exists. Use update logic or delete first.");
             }
 
             var permission = new RolePermission

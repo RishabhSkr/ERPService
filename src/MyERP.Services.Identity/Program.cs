@@ -58,7 +58,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
-builder.Services.AddSingleton<IAuthorizationHandler, AccessControlHandler>();
+// builder.Services.AddSingleton<IAuthorizationHandler, AccessControlHandler>(); // Removed in favor of Middleware
 var app = builder.Build();
 
 // 4. Pipeline Setup

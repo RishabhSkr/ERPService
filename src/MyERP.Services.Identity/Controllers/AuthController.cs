@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using MyERP.Services.Identity.DTOs; // For ApiResponse
 using MyERP.Services.Identity.DTOs.Auth;
 using MyERP.Services.Identity.DTOs.Users;
 
@@ -20,14 +21,15 @@ namespace MyERP.Services.Identity.Controllers
         {
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
             var result = await _authService.LoginAsync(request, ipAddress);
-            return Ok(result);
+            return Ok(ApiResponse<TokenResponseDto>.Ok(result, "Login successful"));
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] CreateUserDto request)
         {
             var userId = await _authService.RegisterAsync(request);
-            return CreatedAtAction(nameof(Login), new { username = request.Username }, new { UserId = userId });
+            // return CreatedAtAction(nameof(Login), new { username = request.Username }, new { UserId = userId });
+            return Ok(ApiResponse<object>.Ok(new { UserId = userId }, "User registered successfully"));
         }
     }
 }

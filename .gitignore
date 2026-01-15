@@ -3,6 +3,7 @@
 ##
 *.json
 *.yaml
+explain_code_flow.md
 Properties/
 Migrations/
 # User-specific files
