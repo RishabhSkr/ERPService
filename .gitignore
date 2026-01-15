@@ -141,3 +141,4 @@ orleans.codegen.cs
 # Brain artifacts
 *.log
 .gemini/
+*.md
