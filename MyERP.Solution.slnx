@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MyERP.Gateway/MyERP.Gateway.csproj" />
+    <Project Path="src/MyERP.Services.Identity/MyERP.Services.Identity.csproj" />
+    <Project Path="src/MyERP.Shared/MyERP.Shared.csproj" />
+  </Folder>
+</Solution>
