@@ -1,5 +1,6 @@
 using System.Net;
 using MyERP.SalesServiceTutorial.Common.Responses;
+using MyERP.SalesServiceTutorial.Common.Exceptions;
 
 namespace MyERP.SalesServiceTutorial.Middleware;
 
@@ -18,15 +19,9 @@ public class GlobalExceptionMiddleware
         {
             await _next(context);
         }
-        catch (KeyNotFoundException ex)
+        catch (AppException ex)
         {
-            context.Response.StatusCode = 404;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(ApiResponse.Fail(ex.Message));
-        }
-        catch (InvalidOperationException ex)
-        {
-            context.Response.StatusCode = 400;
+            context.Response.StatusCode = ex.StatusCode;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(ApiResponse.Fail(ex.Message));
         }

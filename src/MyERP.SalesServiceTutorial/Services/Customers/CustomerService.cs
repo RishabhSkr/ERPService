@@ -1,6 +1,7 @@
 using System.Data;
 using MyERP.SalesServiceTutorial.Models;
 using MyERP.SalesServiceTutorial.Repositories.Customers;
+using MyERP.SalesServiceTutorial.Common.Exceptions;
 
 namespace MyERP.SalesServiceTutorial.Services.Customers;
 
@@ -22,7 +23,7 @@ public class CustomerService : ICustomerService
     {
         var customer = await _repository.GetByIdAsync(id);
         if (customer == null)
-            throw new KeyNotFoundException($"Customer with id {id} not found");
+            throw new NotFoundException($"Customer with id {id} not found");
         return customer;
     }
     
@@ -34,7 +35,7 @@ public class CustomerService : ICustomerService
     public async Task<Customer?> CreateCustomerAsync(Customer customer)
     {
        var existingCustomer = await _repository.GetByEmailAsync(customer.Email);
-        if(existingCustomer != null ) throw new InvalidOperationException("Customer with email " + customer.Email + " already exists");
+        if(existingCustomer != null ) throw new BadRequestException("Customer with email " + customer.Email + " already exists");
         customer.CreatedAt = DateTime.UtcNow;
         await _repository.AddAsync(customer);
         return customer;
@@ -43,7 +44,7 @@ public class CustomerService : ICustomerService
     public async Task<Customer> UpdateCustomerAsync(int id, Customer customer)
     {
         var existingCustomer = await _repository.GetByIdAsync(id);
-        if(existingCustomer == null ) throw new KeyNotFoundException("Customer not found");
+        if(existingCustomer == null ) throw new NotFoundException("Customer not found");
         existingCustomer.Name = customer.Name;
         existingCustomer.Email = customer.Email;
         existingCustomer.Phone = customer.Phone;
@@ -58,7 +59,7 @@ public class CustomerService : ICustomerService
     public async Task DeleteCustomerAsync(int id)
     {
         var existingCustomer = await _repository.GetByIdAsync(id);
-        if(existingCustomer == null ) throw new KeyNotFoundException("Customer not found");
+        if(existingCustomer == null ) throw new NotFoundException("Customer not found");
         await _repository.DeleteAsync(existingCustomer);
     }
 
