@@ -6,6 +6,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using MyERP.SalesServiceTutorial.Validators;
 using MyERP.SalesServiceTutorial.Middleware;
+using MyERP.SalesServiceTutorial.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +21,10 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerValidator>();
 
 builder.Services.AddScoped<ICustomersRepository,CustomerRepository>();
 builder.Services.AddScoped<ICustomerService,CustomerService>();
+builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["InventoryService:BaseUrl"]!);
+});
 
 // // Swagger
 // builder.Services.AddEndpointsApiExplorer();
