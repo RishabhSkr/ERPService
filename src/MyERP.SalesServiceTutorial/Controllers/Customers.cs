@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.SalesServiceTutorial.DTOs.Customers;
 using MyERP.SalesServiceTutorial.Models;
 using MyERP.SalesServiceTutorial.Services.Customers;
+using MyERP.SalesServiceTutorial.Common.Responses;
+
 namespace MyERP.SalesServiceTutorial.Controllers;
 
 [ApiController]
@@ -15,7 +17,6 @@ public class CustomersController : ControllerBase
     }
     
     [HttpGet]
-    [Route("api/customers")]
     public async Task<ActionResult<IEnumerable<CustomerResponseDto>>> GetAllCustomersAsync()
     {
         var customers = await _customerService.GetAllCustomersAsync();
@@ -25,37 +26,30 @@ public class CustomersController : ControllerBase
             c.Name,
             c.Email,
             c.Phone,
-            c.Address,
             c.City,
-            c.Country,
             c.IsActive
         ));
-        return Ok(response);
+        return Ok(ApiResponse<IEnumerable<CustomerResponseDto>>.Ok("Customers retrieved successfully", response));
     }
 
-    [HttpGet]
-    [Route("api/customers/{id}")]
+    [HttpGet("{id}")]
     public async Task<ActionResult<CustomerResponseDto>> GetCustomerByIdAsync(int id)
     {       
         
         var customer = await _customerService.GetCustomerByIdAsync(id);
-        if(customer == null) return NotFound();
-        // Model to DTO
+        // Model to DTO 
         var response = new CustomerResponseDto(
             customer.Id,
             customer.Name,
             customer.Email,
             customer.Phone,
-            customer.Address,
             customer.City,
-            customer.Country,
             customer.IsActive
         );
-        return Ok(response);
+        return Ok(ApiResponse<CustomerResponseDto>.Ok("Customer retrieved successfully", response));
     }
 
     [HttpPost]
-    [Route("api/customers")]
     public async Task<ActionResult<CustomerResponseDto>> CreateCustomerAsync(CreateCustomerDto dto)
     {
             
@@ -76,29 +70,41 @@ public class CustomersController : ControllerBase
             createdCustomer.Name,
             createdCustomer.Email,
             createdCustomer.Phone,
-            createdCustomer.Address,
             createdCustomer.City,
-            createdCustomer.Country,
+            createdCustomer.IsActive
            );
-            return CreatedAtAction(nameof(GetCustomerByIdAsync),new {id = createdCustomer.Id},response); 
+            return Created($"/api/customers/{createdCustomer.Id}", response);
     }
     
-    [HttpPut]
-    [Route("api/customers/{id}")]
+    [HttpPut("{id}")]
     public async Task<ActionResult<CustomerResponseDto>> UpdateCustomerAsync(int id,UpdateCustomerDto dto)
-    {
-        
-        var customer = await _customerService.UpdateCustomerAsync(id,dto);
-        return Ok(customer);
+    {   
+        var customer = new Customer {
+            Name = dto.Name,
+            Email = dto.Email,
+            Phone = dto.Phone,
+            Address = dto.Address,
+            City = dto.City,
+            Country = dto.Country,
+        };
+        var updatedCustomer = await _customerService.UpdateCustomerAsync(id,customer);
+        var response = new CustomerResponseDto(
+            updatedCustomer.Id,
+            updatedCustomer.Name,
+            updatedCustomer.Email,
+            updatedCustomer.Phone,
+            updatedCustomer.City,
+            updatedCustomer.IsActive
+        );
+        return Ok(ApiResponse<CustomerResponseDto>.Ok("Customer updated successfully", response));
     }
     
-    [HttpDelete]
-    [Route("api/customers/{id}")]
+    [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteCustomerAsync(int id)
     {
         
             await _customerService.DeleteCustomerAsync(id);
-            return NoContent();
+            return Ok(ApiResponse<CustomerResponseDto>.Ok("Customer deleted successfully", null));
         
     }
 }

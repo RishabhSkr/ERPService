@@ -20,7 +20,10 @@ public class CustomerService : ICustomerService
     
     public async Task<Customer?> GetCustomerByIdAsync(int id)
     {
-        return await _repository.GetByIdAsync(id);
+        var customer = await _repository.GetByIdAsync(id);
+        if (customer == null)
+            throw new KeyNotFoundException($"Customer with id {id} not found");
+        return customer;
     }
     
     public async Task<Customer?> GetCustomerByEmailAsync(string email)
