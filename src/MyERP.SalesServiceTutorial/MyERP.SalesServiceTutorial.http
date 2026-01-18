@@ -1,0 +1,6 @@
+@MyERP.SalesServiceTutorial_HostAddress = http://localhost:5239
+
+GET {{MyERP.SalesServiceTutorial_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
