@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace MyERP.SalesServiceTutorial.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/sales/[controller]")]
 public class CustomersController : ControllerBase
 {
     private readonly ICustomerService _customerService;

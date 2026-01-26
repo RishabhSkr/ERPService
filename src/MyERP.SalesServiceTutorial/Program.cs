@@ -47,13 +47,14 @@ builder.Services.AddMassTransit(x =>
     // 1. Register consumers (who will receive messages)
     x.AddConsumer<SalesOrderCreatedConsumer>();
 
-    // 2. Configure RabbitMQ connection
+    // 2. Configure RabbitMQ connection (using config for Docker compatibility)
+    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host("localhost", "/", h =>
+        cfg.Host(rabbitHost, "/", h =>
         {
-            h.Username("guest");
-            h.Password("guest");
+            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
         });
 
         // 3. Auto-configure all registered consumers

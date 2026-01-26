@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace MyERP.SalesServiceTutorial.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/sales/[controller]")]
 public class HealthController : ControllerBase
 {
     [HttpGet]
