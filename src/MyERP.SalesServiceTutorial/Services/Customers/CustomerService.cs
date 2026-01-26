@@ -41,7 +41,7 @@ public class CustomerService : ICustomerService
         return customer;
     }
     
-    public async Task<Customer> UpdateCustomerAsync(int id, Customer customer)
+    public async Task<Customer?> UpdateCustomerAsync(int id, Customer customer)
     {
         var existingCustomer = await _repository.GetByIdAsync(id);
         if(existingCustomer == null ) throw new NotFoundException("Customer not found");

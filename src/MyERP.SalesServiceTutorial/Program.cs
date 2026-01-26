@@ -9,10 +9,13 @@ using MyERP.SalesServiceTutorial.Middleware;
 using MyERP.SalesServiceTutorial.Clients;
 using MyERP.SalesServiceTutorial.Events.Publishers;
 using MyERP.SalesServiceTutorial.Events.Consumers;
+using MyERP.SalesServiceTutorial.Events.Consumers.MassTransit;
+using MyERP.SalesServiceTutorial.Events.Publishers.MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using MyERP.SalesServiceTutorial.Authorization;
 using Microsoft.IdentityModel.Tokens;
+using MassTransit;
 using System.Text;
 
 
@@ -20,22 +23,43 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
-builder.Services.AddDbContext<SalesDbContext>(options => 
+builder.Services.AddDbContext<SalesDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerValidator>();
 
-builder.Services.AddScoped<ICustomersRepository,CustomerRepository>();
-builder.Services.AddScoped<ICustomerService,CustomerService>();
+builder.Services.AddScoped<ICustomersRepository, CustomerRepository>();
+builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["InventoryService:BaseUrl"]!);
 });
 
-builder.Services.AddScoped<IEventPublisher, EventPublisher>();
-builder.Services.AddHostedService<SalesOrderEventConsumer>();
+// Using MassTransit Publisher (replaces old raw RabbitMQ EventPublisher)
+builder.Services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
+
+// RabbitMQ Consumer -disabling and replacing with MassTransit
+// builder.Services.AddHostedService<SalesOrderEventConsumer>();
+builder.Services.AddMassTransit(x =>
+{
+    // 1. Register consumers (who will receive messages)
+    x.AddConsumer<SalesOrderCreatedConsumer>();
+
+    // 2. Configure RabbitMQ connection
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("localhost", "/", h =>
+        {
+            h.Username("guest");
+            h.Password("guest");
+        });
+
+        // 3. Auto-configure all registered consumers
+        cfg.ConfigureEndpoints(context);
+    });
+});
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -80,7 +104,7 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
-if(app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
