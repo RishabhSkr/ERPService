@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+
 namespace MyERP.SalesServiceTutorial.Events.Consumers;
+
 public class SalesOrderEventConsumer : BackgroundService
 {
     private readonly ILogger<SalesOrderEventConsumer> _logger;

@@ -14,7 +14,27 @@ namespace MyERP.Services.Identity.Services.Permissions
             _userRepo = userRepo;
         }
 
-        public async Task<List<RolePermissionDto>> GetPermissionsByRoleIdAsync(Guid roleId)
+        public async Task<bool> CheckPermissionAsync(string roleName, string endpoint, string httpMethod)
+        {
+            // Admin bypass - Admin has access to everything
+            if (roleName.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            
+            var roles = await _userRepo.GetAllRolesAsync();
+            var role = roles.FirstOrDefault(r => r.RoleName.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+            if (role == null) return false;
+            
+            var permissions = await _userRepo.GetPermissionsByRoleIdAsync(role.Id);
+            
+            return permissions.Any(p => 
+                p.ApiEndpoint.Equals(endpoint, StringComparison.OrdinalIgnoreCase) &&
+                p.HttpMethod.Equals(httpMethod, StringComparison.OrdinalIgnoreCase) &&
+                p.IsGranted);
+        }
+
+        public async Task<List<RolePermissionDto>> GetRolePermissionsByRoleIdAsync(Guid roleId)
         {
             var permissions = await _userRepo.GetPermissionsByRoleIdAsync(roleId);
             

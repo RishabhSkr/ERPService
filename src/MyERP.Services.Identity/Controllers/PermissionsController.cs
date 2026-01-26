@@ -8,7 +8,6 @@ namespace MyERP.Services.Identity.Controllers
 {
     [ApiController]
     [Route("api/permissions")]
-    [Authorize]
     public class PermissionsController : ControllerBase
     {
         private readonly IPermissionService _permissionService;
@@ -19,20 +18,35 @@ namespace MyERP.Services.Identity.Controllers
         }
 
         [HttpGet("role/{roleId}")]
+        [Authorize]
         public async Task<IActionResult> GetByRole(Guid roleId)
         {
-            var permissions = await _permissionService.GetPermissionsByRoleIdAsync(roleId);
+            var permissions = await _permissionService.GetRolePermissionsByRoleIdAsync(roleId);
             return Ok(ApiResponse<List<RolePermissionDto>>.Ok(permissions));
         }
 
         [HttpPost("grant")]
+        [Authorize]
         public async Task<IActionResult> GrantPermission([FromBody] GrantPermissionDto request)
         {
              await _permissionService.GrantPermissionAsync(request);
              return Ok(ApiResponse.Ok("Permission granted successfully"));
         }
 
+        [HttpPost("check")]
+        public async Task<IActionResult> CheckPermission([FromBody] CheckPermissionDto request)
+        {
+            var hasAccess = await _permissionService.CheckPermissionAsync(
+                request.RoleName, 
+                request.Endpoint, 
+                request.HttpMethod);
+            
+            return Ok(ApiResponse<CheckPermissionResultDto>.Ok(
+                new CheckPermissionResultDto { HasAccess = hasAccess }));
+        }
+
         [HttpDelete("revoke/{id}")]
+        [Authorize]
         public async Task<IActionResult> RevokePermission(Guid id)
         {
             await _permissionService.RevokePermissionAsync(id);

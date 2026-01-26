@@ -17,8 +17,9 @@ namespace MyERP.Services.Identity.Middleware
             // 1. Bypass logic (e.g. Public endpoints, Swagger)
             var path = context.Request.Path.Value?.ToLower() ?? "";
             
-            // Allow Auth endpoints and Public assets
+            // Allow Auth endpoints, Permission check, and Public assets
             if (path.StartsWith("/api/auth") || 
+                path.StartsWith("/api/permissions/check") ||  // For inter-service permission checks
                 path.StartsWith("/swagger") || 
                 path == "/")
             {

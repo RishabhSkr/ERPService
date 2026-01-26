@@ -3,7 +3,7 @@ using MyERP.SalesServiceTutorial.DTOs.Customers;
 using MyERP.SalesServiceTutorial.Models;
 using MyERP.SalesServiceTutorial.Services.Customers;
 using MyERP.SalesServiceTutorial.Common.Responses;
-
+using Microsoft.AspNetCore.Authorization;
 namespace MyERP.SalesServiceTutorial.Controllers;
 
 [ApiController]
@@ -14,6 +14,13 @@ public class CustomersController : ControllerBase
     public CustomersController(ICustomerService customerService)
     {
         _customerService = customerService;
+    }
+    
+    [HttpGet("protected")]        
+    [Authorize(Policy = "DynamicPermission")]                   
+    public ActionResult GetProtectedData()
+    {
+        return Ok(ApiResponse.Ok("✅ You are authenticated! This is protected data."));
     }
     
     [HttpGet]

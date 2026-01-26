@@ -9,6 +9,11 @@ using MyERP.SalesServiceTutorial.Middleware;
 using MyERP.SalesServiceTutorial.Clients;
 using MyERP.SalesServiceTutorial.Events.Publishers;
 using MyERP.SalesServiceTutorial.Events.Consumers;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using MyERP.SalesServiceTutorial.Authorization;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +37,40 @@ builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(
 builder.Services.AddScoped<IEventPublisher, EventPublisher>();
 builder.Services.AddHostedService<SalesOrderEventConsumer>();
 
+// JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidAudience = jwtSettings["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+    };
+});
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+    {
+        policy.Requirements.Add(new PermissionRequirement());
+    });
+});
+
+
 // // Swagger
 // builder.Services.AddEndpointsApiExplorer();
 // builder.Services.AddSwaggerGen(c =>
@@ -47,6 +86,9 @@ if(app.Environment.IsDevelopment())
 }
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
+
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
