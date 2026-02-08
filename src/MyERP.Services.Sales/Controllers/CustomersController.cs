@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Sales.DTOs;
 using MyERP.Services.Sales.DTOs.Customers;
 using MyERP.Services.Sales.Services.Customers;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Sales.Controllers
 {
     [ApiController]
     [Route("api/sales/customers")]
+    [Authorize(Policy = "DynamicPermission")]
     public class CustomersController : ControllerBase
     {
         private readonly ICustomerService _customerService;

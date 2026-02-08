@@ -1,0 +1,10 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  MyERP.Shared -> C:\Users\ADMIN\OneDrive\Desktop\MyERP.Solution\src\MyERP.Shared\bin\Debug\net10.0\MyERP.Shared.dll
+  MyERP.Services.Sales -> C:\Users\ADMIN\OneDrive\Desktop\MyERP.Solution\src\MyERP.Services.Sales\bin\Debug\net10.0\MyERP.Services.Sales.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.35

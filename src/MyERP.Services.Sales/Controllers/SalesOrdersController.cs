@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Sales.DTOs;
 using MyERP.Services.Sales.DTOs.SalesOrders;
 using MyERP.Services.Sales.Services.SalesOrders;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Sales.Controllers
 {
     [ApiController]
     [Route("api/sales/orders")]
+    [Authorize(Policy = "DynamicPermission")]
     public class SalesOrdersController : ControllerBase
     {
         private readonly ISalesOrderService _orderService;
@@ -19,8 +21,11 @@ namespace MyERP.Services.Sales.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateSalesOrderDto dto)
         {
-            // TODO: Get userId from JWT claims
-            Guid? createdBy = null;
+            // Get userId from JWT claims (safely handles non-GUID values like "99999999")
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            Guid? createdBy = userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var userId) 
+                ? userId 
+                : null;
             
             var result = await _orderService.CreateAsync(dto, createdBy);
             return CreatedAtAction(nameof(GetById), new { id = result.Id },

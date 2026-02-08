@@ -9,6 +9,10 @@ using MyERP.Services.Sales.Services.Customers;
 using MyERP.Services.Sales.Services.SalesOrders;
 using MyERP.Services.Sales.Services.External;
 using MyERP.Services.Sales.Validators;
+using MyERP.Services.Sales.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using MassTransit;
+using MyERP.Services.Sales.Events.Producers.Publishers.MassTransit;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +58,17 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+    {
+        policy.Requirements.Add(new PermissionRequirement());
+    });
+});
+
 // 6. Register Repositories
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
@@ -70,8 +85,31 @@ builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-// 9. Register Event Publisher (placeholder for RabbitMQ)
-builder.Services.AddScoped<IEventPublisher, LoggingEventPublisher>();
+
+// 9. Register Event Publisher (MassTransit)
+builder.Services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
+
+// Using MassTransit to publish events
+// NOTE: Sales PUBLISHES events, does NOT consume them. Production service consumes.
+builder.Services.AddMassTransit(x =>
+{
+    // NO consumers here - Sales only publishes
+    // Production service will consume SalesOrderCreatedEvent
+    
+    // Configure RabbitMQ
+    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(rabbitHost, "/", h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
+        });
+        // Auto-configure endpoints (DLQ automatic!)
+        cfg.ConfigureEndpoints(context);
+    });
+});
+
 
 // 10. CORS
 builder.Services.AddCors(options =>

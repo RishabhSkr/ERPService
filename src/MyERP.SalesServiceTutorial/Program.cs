@@ -105,6 +105,13 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// Auto-migrate database on startup (Docker ke liye zaroori!)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SalesDbContext>();
+    db.Database.Migrate();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -117,4 +124,3 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
