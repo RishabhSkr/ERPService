@@ -75,6 +75,11 @@ namespace MyERP.Shared.Events
         
         public Guid ProductionOrderId { get; set; }
         public string ProductionOrderNumber { get; set; } = string.Empty;
+
+        // WO-level reservation (nullable = backward compatible with PO-level)
+        public Guid? WorkOrderId { get; set; }
+        public string? WorkOrderNumber { get; set; }
+
         public string? BomCode { get; set; }
         public int? BomVersion { get; set; }
         public List<MaterialToReserve> Materials { get; set; } = new();
@@ -160,6 +165,10 @@ namespace MyERP.Shared.Events
         public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
         
         public Guid ProductionOrderId { get; set; }
+
+        // WO-level reservation response (nullable = backward compatible)
+        public Guid? WorkOrderId { get; set; }
+
         public bool Success { get; set; }
         public string? FailureReason { get; set; }
         public List<ReservedMaterial> ReservedMaterials { get; set; } = new();

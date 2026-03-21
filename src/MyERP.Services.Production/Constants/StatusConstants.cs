@@ -37,11 +37,12 @@ namespace MyERP.Services.Production.Constants
     }
 
     /// <summary>
-    /// Work Order: Pending → InProgress → Completed / Cancelled
+    /// Work Order: Pending → Released → InProgress → Completed / Cancelled
     /// </summary>
     public static class WorkOrderStatus
     {
         public const string Pending = "Pending";
+        public const string Released = "Released";
         public const string InProgress = "InProgress";
         public const string Completed = "Completed";
         public const string Cancelled = "Cancelled";

@@ -81,5 +81,13 @@ namespace MyERP.Services.Production.Repositories.Equipment
         public async Task<bool> CanPerformProcessAsync(Guid equipmentId, Guid processId) =>
             await _context.EquipmentProcesses
                 .AnyAsync(ep => ep.EquipmentId == equipmentId && ep.ProcessId == processId);
+
+        public async Task<IEnumerable<Models.Equipment>> GetByProcessIdAsync(Guid processId) =>
+            await _context.EquipmentProcesses
+                .Where(ep => ep.ProcessId == processId)
+                .Include(ep => ep.Equipment).ThenInclude(e => e!.WorkCenter)
+                .Select(ep => ep.Equipment!)
+                .Where(e => e.IsActive)
+                .ToListAsync();
     }
 }

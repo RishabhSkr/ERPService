@@ -1,8 +1,12 @@
 /*
  * StockReservedConsumer - Handles Inventory reservation response
  * 
- * 📚 Sub-State Pattern:
- *   On Success → ReservationStatus = Reserved (can Start production)
+ * 📚 Handles BOTH:
+ *   - PO-level: WorkOrderId = null → updates ProductionOrder
+ *   - WO-level: WorkOrderId has value → updates WorkOrder
+ * 
+ * Sub-State Pattern:
+ *   On Success → ReservationStatus = Reserved (can activate/start)
  *   On Failure → ReservationStatus = Failed (user can Retry)
  */
 
@@ -34,11 +38,74 @@ namespace MyERP.Services.Production.Events.Consumers
             var @event = context.Message;
             
             _logger.LogInformation(
-                "Received StockReservedEvent: ProductionOrderId={ProductionOrderId}, Success={Success}",
-                @event.ProductionOrderId,
-                @event.Success);
+                "Received StockReservedEvent: POId={POId}, WOId={WOId}, Success={Success}",
+                @event.ProductionOrderId, @event.WorkOrderId, @event.Success);
 
-            // Find the production order with materials
+            // ============================================================
+            // ROUTE: WorkOrderId present → WO-level, otherwise PO-level
+            // ============================================================
+            if (@event.WorkOrderId.HasValue)
+            {
+                await HandleWorkOrderReservation(@event);
+            }
+            else
+            {
+                await HandleProductionOrderReservation(@event);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// 🆕 WO-level: Update WorkOrder reservation status
+        /// </summary>
+        private async Task HandleWorkOrderReservation(StockReservedEvent @event)
+        {
+            var wo = await _context.WorkOrders
+                .FirstOrDefaultAsync(w => w.WorkOrderId == @event.WorkOrderId);
+
+            if (wo == null)
+            {
+                _logger.LogWarning("WorkOrder not found: {WorkOrderId}", @event.WorkOrderId);
+                return;
+            }
+
+            // Only process if WO is Released + Pending reservation
+            if (wo.Status != WorkOrderStatus.Released ||
+                wo.ReservationStatus != ReservationStatus.Pending)
+            {
+                _logger.LogWarning(
+                    "Ignoring StockReservedEvent for WO {WONumber} — Status={Status}, Reservation={Reservation}",
+                    wo.WorkOrderNumber, wo.Status, wo.ReservationStatus);
+                return;
+            }
+
+            if (@event.Success)
+            {
+                wo.ReservationStatus = ReservationStatus.Reserved;
+                wo.UpdatedAt = DateTime.UtcNow;
+
+                _logger.LogInformation(
+                    "✅ WO {WONumber} — materials reserved, ready to activate",
+                    wo.WorkOrderNumber);
+            }
+            else
+            {
+                wo.ReservationStatus = ReservationStatus.Failed;
+                wo.ReservationFailReason = @event.FailureReason ?? "Unknown failure";
+                wo.UpdatedAt = DateTime.UtcNow;
+
+                _logger.LogWarning(
+                    "❌ Reservation failed for WO {WONumber}: {Reason}",
+                    wo.WorkOrderNumber, @event.FailureReason);
+            }
+        }
+
+        /// <summary>
+        /// Existing PO-level: Update ProductionOrder (untouched, backward compatible)
+        /// </summary>
+        private async Task HandleProductionOrderReservation(StockReservedEvent @event)
+        {
             var order = await _context.ProductionOrders
                 .Include(o => o.MaterialRequirements)
                 .FirstOrDefaultAsync(o => o.Id == @event.ProductionOrderId);
@@ -49,19 +116,17 @@ namespace MyERP.Services.Production.Events.Consumers
                 return;
             }
 
-            // Only process if order is Released + Pending
             if (order.Status != ProductionOrderStatus.Released ||
                 order.ReservationStatus != ReservationStatus.Pending)
             {
                 _logger.LogWarning(
-                    "Ignoring StockReservedEvent for {OrderNumber} — Status={Status}, ReservationStatus={ReservationStatus}",
+                    "Ignoring StockReservedEvent for {OrderNumber} — Status={Status}, Reservation={Reservation}",
                     order.OrderNumber, order.Status, order.ReservationStatus);
                 return;
             }
 
             if (@event.Success)
             {
-                // ✅ SUCCESS: Update material quantities + set Reserved
                 foreach (var reserved in @event.ReservedMaterials)
                 {
                     var requirement = order.MaterialRequirements
@@ -83,18 +148,14 @@ namespace MyERP.Services.Production.Events.Consumers
             }
             else
             {
-                // ❌ FAILURE: Set Failed + store reason for user to see
                 order.ReservationStatus = ReservationStatus.Failed;
                 order.ReservationFailReason = @event.FailureReason ?? "Unknown failure";
                 order.UpdatedAt = DateTime.UtcNow;
 
                 _logger.LogWarning(
                     "❌ Reservation failed for {OrderNumber}: {Reason}",
-                    order.OrderNumber,
-                    @event.FailureReason);
+                    order.OrderNumber, @event.FailureReason);
             }
-
-            await _context.SaveChangesAsync();
         }
     }
 }

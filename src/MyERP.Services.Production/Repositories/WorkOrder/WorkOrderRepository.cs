@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyERP.Services.Production.Constants;
 using MyERP.Services.Production.Data;
 using MyERP.Services.Production.Models;
 
@@ -15,6 +16,8 @@ namespace MyERP.Services.Production.Repositories.WorkOrder
         public async Task<Models.WorkOrder?> GetByIdWithExecutionsAsync(Guid id) =>
             await _context.WorkOrders
                 .Include(w => w.Executions).ThenInclude(e => e.Equipment)
+                .Include(w => w.WorkCenter)
+                .Include(w => w.Process)
                 .FirstOrDefaultAsync(w => w.WorkOrderId == id);
 
         public async Task<IEnumerable<Models.WorkOrder>> GetByProductionOrderAsync(Guid productionOrderId) =>
@@ -25,6 +28,17 @@ namespace MyERP.Services.Production.Repositories.WorkOrder
                 .Include(w => w.WorkCenter)
                 .Include(w => w.Executions).ThenInclude(e => e.Equipment)
                 .OrderBy(w => w.StepNumber)
+                .ThenBy(w => w.CreatedAt)
+                .ToListAsync();
+
+        public async Task<IEnumerable<Models.WorkOrder>> GetAllByProductionOrderWithDetailsAsync(Guid productionOrderId) =>
+            await _context.WorkOrders
+                .Where(w => w.ProductionOrderId == productionOrderId)
+                .Include(w => w.ProductionOrder)
+                .Include(w => w.Process)
+                .Include(w => w.WorkCenter)
+                .OrderBy(w => w.StepNumber)
+                .ThenBy(w => w.CreatedAt)
                 .ToListAsync();
 
         public async Task<int> GetCountAsync() =>
@@ -32,6 +46,35 @@ namespace MyERP.Services.Production.Repositories.WorkOrder
 
         public async Task<bool> ExistForProductionOrderAsync(Guid productionOrderId) =>
             await _context.WorkOrders.AnyAsync(w => w.ProductionOrderId == productionOrderId);
+
+        /// <summary>
+        /// HybridSum: THE critical formula for over-planning prevention.
+        /// 
+        /// Completed WO → use QuantityCompleted (actual output, scrap excluded)
+        /// Active WO     → use QuantityPlanned  (blocks room, prevents over-planning)
+        /// Cancelled      → excluded from sum entirely
+        /// 
+        /// Example: PO=300, WO#1: Planned=200, Completed=180 (scrap=20)
+        ///   Plain sum:   remaining = 300 - 200 = 100 → lost 20 can't re-plan ❌
+        ///   Hybrid sum:  remaining = 300 - 180 = 120 → 20 freed for re-planning ✅
+        /// </summary>
+        public async Task<decimal> GetHybridSumForStepAsync(Guid productionOrderId, Guid processRouteStepId)
+        {
+            return await _context.WorkOrders
+                .Where(wo => wo.ProductionOrderId == productionOrderId
+                          && wo.ProcessRouteStepId == processRouteStepId
+                          && wo.Status != WorkOrderStatus.Cancelled)
+                .SumAsync(wo =>
+                    wo.Status == WorkOrderStatus.Completed
+                        ? wo.QuantityCompleted   // actual output
+                        : wo.QuantityPlanned);   // blocks room
+        }
+
+        public async Task AddAsync(Models.WorkOrder workOrder)
+        {
+            _context.WorkOrders.Add(workOrder);
+            await _context.SaveChangesAsync();
+        }
 
         public async Task AddRangeAsync(IEnumerable<Models.WorkOrder> workOrders)
         {

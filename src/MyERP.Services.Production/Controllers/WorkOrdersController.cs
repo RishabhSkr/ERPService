@@ -18,8 +18,80 @@ namespace MyERP.Services.Production.Controllers
             _logger = logger;
         }
 
+        // ====================================
+        // NEW: Dashboard + Planning Info
+        // ====================================
+
         /// <summary>
-        /// Generate Work Orders from Production Order + ProcessRoute
+        /// Dashboard — POs with per-step WO aggregation
+        /// </summary>
+        [HttpGet("work-orders/dashboard")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<WorkOrderDashboardDto>>>> GetDashboard()
+        {
+            var result = await _service.GetDashboardAsync();
+            return Ok(ApiResponse<IEnumerable<WorkOrderDashboardDto>>.Ok(result));
+        }
+
+        /// <summary>
+        /// Planning Info — remaining qty + equipment per step before creating WO
+        /// </summary>
+        [HttpGet("work-orders/planning-info/{productionOrderId:guid}")]
+        public async Task<ActionResult<ApiResponse<WorkOrderPlanningInfoDto>>> GetPlanningInfo(Guid productionOrderId)
+        {
+            var result = await _service.GetPlanningInfoAsync(productionOrderId);
+            return Ok(ApiResponse<WorkOrderPlanningInfoDto>.Ok(result));
+        }
+
+        // ====================================
+        // NEW: Create WO (User-specified qty)
+        // ====================================
+
+        /// <summary>
+        /// Create Work Order — user specifies qty, step, workCenter
+        /// </summary>
+        [HttpPost("work-orders/create")]
+        public async Task<ActionResult<ApiResponse<WorkOrderDto>>> Create([FromBody] CreateWorkOrderDto dto)
+        {
+            var result = await _service.CreateAsync(dto);
+            return StatusCode(201, ApiResponse<WorkOrderDto>.Ok(result, "Work Order created successfully"));
+        }
+
+        /// <summary>
+        /// Release WO — reserve materials (BOM × WO qty)
+        /// </summary>
+        [HttpPatch("work-orders/{workOrderId:guid}/release")]
+        public async Task<ActionResult<ApiResponse<WorkOrderDto>>> Release(Guid workOrderId)
+        {
+            var result = await _service.ReleaseAsync(workOrderId);
+            return Ok(ApiResponse<WorkOrderDto>.Ok(result, "Work Order released, reservation pending"));
+        }
+
+        /// <summary>
+        /// Cancel WO — with reason (any state except Completed)
+        /// </summary>
+        [HttpDelete("work-orders/{workOrderId:guid}")]
+        public async Task<ActionResult<ApiResponse<string>>> Cancel(Guid workOrderId, [FromQuery] string reason)
+        {
+            await _service.CancelAsync(workOrderId, reason);
+            return Ok(ApiResponse<string>.Ok("Work Order cancelled", $"Cancelled: {reason}"));
+        }
+
+        /// <summary>
+        /// Retry failed reservation
+        /// </summary>
+        [HttpPost("work-orders/{workOrderId:guid}/retry-reservation")]
+        public async Task<ActionResult<ApiResponse<string>>> RetryReservation(Guid workOrderId)
+        {
+            await _service.RetryReservationAsync(workOrderId);
+            return Ok(ApiResponse<string>.Ok("Reservation retry initiated"));
+        }
+
+        // ====================================
+        // EXISTING: Auto-generate (convenience)
+        // ====================================
+
+        /// <summary>
+        /// Generate Work Orders from Production Order + ProcessRoute (auto — full PO qty)
         /// </summary>
         [HttpPost("orders/{productionOrderId:guid}/generate-work-orders")]
         public async Task<ActionResult<ApiResponse<IEnumerable<WorkOrderDto>>>> GenerateWorkOrders(Guid productionOrderId)
@@ -34,6 +106,10 @@ namespace MyERP.Services.Production.Controllers
         [HttpGet("orders/{productionOrderId:guid}/work-orders")]
         public async Task<ActionResult<ApiResponse<IEnumerable<WorkOrderDto>>>> GetByPO(Guid productionOrderId) =>
             Ok(ApiResponse<IEnumerable<WorkOrderDto>>.Ok(await _service.GetByProductionOrderAsync(productionOrderId)));
+
+        // ====================================
+        // EXISTING: Equipment activation + tracking
+        // ====================================
 
         /// <summary>
         /// Activate a Work Order on Equipment
