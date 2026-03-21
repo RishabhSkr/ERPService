@@ -1,0 +1,29 @@
+using MassTransit;
+using MyERP.Services.Sales.Events;
+
+namespace MyERP.Services.Sales.Events.Consumers.MassTransit;
+
+public class SalesOrderCreatedConsumer : IConsumer<SalesOrderCreatedEvent>
+{
+    private readonly ILogger<SalesOrderCreatedConsumer> _logger;
+
+    public SalesOrderCreatedConsumer(ILogger<SalesOrderCreatedConsumer> logger)
+    {
+        _logger = logger;
+    }
+    public Task Consume(ConsumeContext<SalesOrderCreatedEvent> context)
+    {
+        var order = context.Message;
+        
+        _logger.LogInformation(
+            "📦 [MassTransit] ORDER RECEIVED! SalesOrderId: {SalesOrderId}, CustomerId: {CustomerId}, OrderNumber: {OrderNumber}",
+            order.SalesOrderId,
+            order.CustomerId,
+            order.OrderNumber);
+        
+        // Process the event (update inventory, send email, etc.)
+        _logger.LogInformation("✅ Order {SalesOrderId} processed successfully!", order.SalesOrderId);
+        
+        return Task.CompletedTask;
+    }
+}

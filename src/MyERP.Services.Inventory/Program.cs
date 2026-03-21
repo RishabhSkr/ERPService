@@ -15,8 +15,36 @@ using MyERP.Services.Inventory.Services.Products;
 using MyERP.Services.Inventory.Services.RawMaterials;
 using MyERP.Services.Inventory.Services.StockMovements;
 using MyERP.Services.Inventory.Validators;
+using MassTransit;
+using MyERP.Services.Inventory.Events.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddMassTransit(x =>
+{
+    // Register all consumers with explicit endpoint names
+    x.AddConsumer<MaterialReservationRequestedConsumer>();
+    x.AddConsumer<MaterialReturnRequestedConsumer>();
+    x.AddConsumer<BatchConcludedConsumer>();
+    
+    // Configure RabbitMQ
+    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(rabbitHost, "/", h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
+        });
+        
+        // Configure all endpoints (including our explicit "sales-order-created")
+        cfg.ConfigureEndpoints(context);
+        
+        Console.WriteLine("🔧 [MassTransit] All endpoints Inventory Service configured");
+    });
+});
+
+
 
 // 1. Database Connection
 builder.Services.AddDbContext<InventoryDbContext>(options =>

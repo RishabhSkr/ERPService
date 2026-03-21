@@ -75,6 +75,8 @@ namespace MyERP.Shared.Events
         
         public Guid ProductionOrderId { get; set; }
         public string ProductionOrderNumber { get; set; } = string.Empty;
+        public string? BomCode { get; set; }
+        public int? BomVersion { get; set; }
         public List<MaterialToReserve> Materials { get; set; } = new();
     }
 
@@ -127,6 +129,21 @@ namespace MyERP.Shared.Events
         public decimal QuantityConsumed { get; set; }
         public decimal QuantityReturned { get; set; }
         public string Unit { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Published by Production when cancelled "&" materials need returning (SAGA).
+    /// Consumed by Inventory to release reservations.
+    /// </summary>
+    public class MaterialReturnRequestedEvent
+    {
+        public Guid EventId { get; set; } = Guid.NewGuid();
+        public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
+        public string EventType { get; set; } = "MaterialReturnRequested";
+        
+        public Guid ProductionOrderId { get; set; }
+        public string ProductionOrderNumber { get; set; } = string.Empty;
+        public List<MaterialConsumed> MaterialsConsumed { get; set; } = new();
     }
 
     // ========================================

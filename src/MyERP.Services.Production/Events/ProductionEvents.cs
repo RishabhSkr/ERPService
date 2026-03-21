@@ -1,20 +1,25 @@
 /*
- * Production Events - Messages published by Production Service
+ * Production Events - PRODUCTION-ONLY events
  * 
- * 📚 INDUSTRY vs NOOB:
+ * 📚 INDUSTRY PRACTICE:
  * 
- * ❌ NOOB: Put event classes everywhere, no standard structure
- * ✅ INDUSTRY:
- *    1. All events have common base fields (EventId, OccurredAt, EventType)
- *    2. Events are immutable (no setters after creation in real apps)
- *    3. Clear naming: VerbNoun pattern (MaterialReservationRequested)
- *    4. Events describe WHAT HAPPENED, not commands
+ * ✅ Cross-service events (MaterialReservationRequested, StockReserved, etc.)
+ *    live in MyERP.Shared.Events — BOTH publisher and consumer use SAME class
+ *    
+ * ✅ Production-internal events (BatchProgress — not consumed by other services)
+ *    live HERE in this file
+ * 
+ * 📝 WHY separate?
+ *    MassTransit uses "Namespace:ClassName" for exchange routing
+ *    If Publisher uses MyERP.Services.Production.Events.MaterialReservationRequestedEvent
+ *    But Consumer uses MyERP.Shared.Events.MaterialReservationRequestedEvent
+ *    → Different exchanges → Messages DON'T connect! 💀
  */
 
 namespace MyERP.Services.Production.Events
 {
     // ========================================
-    // BASE EVENT
+    // BASE EVENT (Production-specific)
     // ========================================
     
     /// <summary>
@@ -30,46 +35,12 @@ namespace MyERP.Services.Production.Events
     }
 
     // ========================================
-    // OUTGOING EVENTS (Published by Production)
+    // PRODUCTION-ONLY EVENTS (NOT cross-service)
     // ========================================
 
     /// <summary>
-    /// Request Inventory to reserve raw materials
-    /// Sent when: ProductionOrder is approved/released
-    /// </summary>
-    public class MaterialReservationRequestedEvent : ProductionEventBase
-    {
-        public override string EventType => "MaterialReservationRequested";
-        
-        public Guid ProductionOrderId { get; set; }
-        public string ProductionOrderNumber { get; set; } = string.Empty;
-        
-        public List<MaterialToReserve> Materials { get; set; } = new();
-    }
-
-    public class MaterialToReserve
-    {
-        public Guid RawMaterialId { get; set; }
-        public string MaterialCode { get; set; } = string.Empty;
-        public decimal Quantity { get; set; }
-        public string Unit { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    /// Notify that production order was cancelled
-    /// Inventory should release any reservations
-    /// </summary>
-    public class ProductionOrderCancelledEvent : ProductionEventBase
-    {
-        public override string EventType => "ProductionOrderCancelled";
-        
-        public Guid ProductionOrderId { get; set; }
-        public string ProductionOrderNumber { get; set; } = string.Empty;
-        public string Reason { get; set; } = string.Empty;
-    }
-
-    /// <summary>
     /// Real-time progress update (for dashboard)
+    /// NOT consumed by other services — Production internal only
     /// </summary>
     public class BatchProgressEvent : ProductionEventBase
     {
@@ -84,75 +55,18 @@ namespace MyERP.Services.Production.Events
             : 0;
     }
 
-    /// <summary>
-    /// Production batch is complete
-    /// Inventory should: add finished goods, handle scrap, return unused materials
-    /// </summary>
-    public class BatchConcludedEvent : ProductionEventBase
-    {
-        public override string EventType => "BatchConcluded";
-        
-        public Guid ProductionOrderId { get; set; }
-        public string ProductionOrderNumber { get; set; } = string.Empty;
-        
-        public Guid ProductId { get; set; }
-        public string ProductCode { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// Good finished products to add to inventory
-        /// </summary>
-        public decimal QuantityGood { get; set; }
-        
-        /// <summary>
-        /// Scrapped units
-        /// </summary>
-        public decimal QuantityScrap { get; set; }
-        
-        /// <summary>
-        /// Materials consumed (actual usage)
-        /// </summary>
-        public List<MaterialConsumed> MaterialsConsumed { get; set; } = new();
-    }
-
-    public class MaterialConsumed
-    {
-        public Guid RawMaterialId { get; set; }
-        public string MaterialCode { get; set; } = string.Empty;
-        public decimal QuantityConsumed { get; set; }
-        public decimal QuantityReturned { get; set; }  // Unused material
-        public string Unit { get; set; } = string.Empty;
-    }
-
     // ========================================
-    // INCOMING EVENTS (Consumed by Production)
+    // CROSS-SERVICE EVENTS → USE MyERP.Shared.Events
     // ========================================
-    
-    // ❌ REMOVED: SalesOrderCreatedEvent was here causing DUPLICATE!
-    // ✅ FIX: Use MyERP.Shared.Events.SalesOrderCreatedEvent instead
-    //    The consumer already imports it via: using MyERP.Shared.Events;
     //
-    // 📝 INDUSTRY LESSON:
-    //    - Event classes must be SAME class (same namespace) for publisher and consumer
-    //    - MassTransit uses "Namespace:ClassName" to create exchange names
-    //    - Different namespaces = Different exchanges = Messages don't connect!
-
-    /// <summary>
-    /// Inventory confirmed stock was reserved
-    /// </summary>
-    public class StockReservedEvent
-    {
-        public Guid EventId { get; set; }
-        public DateTime OccurredAt { get; set; }
-        
-        public Guid ProductionOrderId { get; set; }
-        public bool Success { get; set; }
-        public string? FailureReason { get; set; }
-        public List<ReservedMaterial> ReservedMaterials { get; set; } = new();
-    }
-
-    public class ReservedMaterial
-    {
-        public Guid RawMaterialId { get; set; }
-        public decimal QuantityReserved { get; set; }
-    }
+    // ✅ MaterialReservationRequestedEvent  → MyERP.Shared.Events
+    // ✅ MaterialToReserve                  → MyERP.Shared.Events
+    // ✅ ProductionOrderCancelledEvent      → MyERP.Shared.Events
+    // ✅ BatchConcludedEvent                → MyERP.Shared.Events
+    // ✅ MaterialConsumed                   → MyERP.Shared.Events
+    // ✅ MaterialReturnRequestedEvent       → MyERP.Shared.Events
+    // ✅ StockReservedEvent                 → MyERP.Shared.Events
+    // ✅ ReservedMaterial                   → MyERP.Shared.Events
+    //
+    // Add: using MyERP.Shared.Events; wherever these are used
 }

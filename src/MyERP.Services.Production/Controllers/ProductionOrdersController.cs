@@ -123,6 +123,37 @@ namespace MyERP.Services.Production.Controllers
             return Ok(new ApiResponse { Success = true, Message = "Order cancelled" });
         }
 
+        /// <summary>
+        /// Release a production order for manufacturing
+        /// Moves from 'Create' to 'Released' with ReservationStatus=Pending
+        /// </summary>
+        [HttpPatch("{id:guid}/release")]
+        public async Task<ActionResult<ApiResponse<string>>> Release(Guid id)
+        {
+            var userId = GetCurrentUserId();
+            await _service.ReleaseAsync(id, userId);
+            return Ok(new ApiResponse
+            {
+                Success = true,
+                Message = "Production order released. Material reservation requested."
+            });
+        }
+
+        /// <summary>
+        /// Retry failed material reservation
+        /// Only works when ReservationStatus = 'Failed'
+        /// </summary>
+        [HttpPost("{id:guid}/retry-reservation")]
+        public async Task<ActionResult<ApiResponse<string>>> RetryReservation(Guid id)
+        {
+            await _service.RetryReservationAsync(id);
+            return Ok(new ApiResponse
+            {
+                Success = true,
+                Message = "Reservation retry initiated."
+            });
+        }
+
         private Guid? GetCurrentUserId()
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

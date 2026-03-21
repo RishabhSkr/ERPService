@@ -15,6 +15,8 @@
  *    - Audit trail = who approved what, when
  */
 
+using MyERP.Services.Production.Constants;
+
 namespace MyERP.Services.Production.Models
 {
     /// <summary>
@@ -93,15 +95,5 @@ namespace MyERP.Services.Production.Models
         
         // Navigation
         public virtual PendingRequest? PendingRequest { get; set; }
-    }
-    
-    /// <summary>
-    /// Status constants - Industry practice over magic strings
-    /// </summary>
-    public static class PendingRequestStatus
-    {
-        public const string Pending = "Pending";
-        public const string Approved = "Approved";
-        public const string Cancelled = "Cancelled";
     }
 }

@@ -39,6 +39,17 @@ using MyERP.Services.Production.Events.Consumers;
 using MyERP.Services.Production.Events.Publishers;
 using MyERP.Services.Production.Validators;
 using MyERP.Services.Production.Services.External;
+using MyERP.Services.Production.Services.MRP;
+using MyERP.Services.Production.Repositories.Process;
+using MyERP.Services.Production.Repositories.WorkCenter;
+using MyERP.Services.Production.Repositories.Equipment;
+using MyERP.Services.Production.Repositories.ProcessRoute;
+using MyERP.Services.Production.Repositories.WorkOrder;
+using MyERP.Services.Production.Services.Process;
+using MyERP.Services.Production.Services.WorkCenter;
+using MyERP.Services.Production.Services.Equipment;
+using MyERP.Services.Production.Services.ProcessRoute;
+using MyERP.Services.Production.Services.WorkOrder;
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================================================
@@ -51,7 +62,7 @@ var inventoryServiceUrl = builder.Configuration["Services:InventoryServiceUrl"]
     ?? "http://localhost:5004";
 builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
 {
-    client.BaseAddress = new Uri(inventoryServiceUrl);
+    client.BaseAddress = new Uri(inventoryServiceUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
@@ -123,6 +134,21 @@ builder.Services.AddScoped<IProductionOrderRepository, ProductionOrderRepository
 builder.Services.AddScoped<IBOMService, BOMService>();
 builder.Services.AddScoped<IPendingRequestService, PendingRequestService>();
 builder.Services.AddScoped<IProductionOrderService, ProductionOrderService>();
+builder.Services.AddScoped<IMRPService, MRPService>();
+
+// Work Orders & Routing — Repositories
+builder.Services.AddScoped<IProcessRepository, ProcessRepository>();
+builder.Services.AddScoped<IWorkCenterRepository, WorkCenterRepository>();
+builder.Services.AddScoped<IEquipmentRepository, EquipmentRepository>();
+builder.Services.AddScoped<IProcessRouteRepository, ProcessRouteRepository>();
+builder.Services.AddScoped<IWorkOrderRepository, WorkOrderRepository>();
+
+// Work Orders & Routing — Services
+builder.Services.AddScoped<IProcessService, ProcessService>();
+builder.Services.AddScoped<IWorkCenterService, WorkCenterService>();
+builder.Services.AddScoped<IEquipmentService, EquipmentService>();
+builder.Services.AddScoped<IProcessRouteService, ProcessRouteService>();
+builder.Services.AddScoped<IWorkOrderService, WorkOrderService>();
 
 // ============================================================================
 // 7. EVENT PUBLISHER

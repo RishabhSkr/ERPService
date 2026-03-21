@@ -12,6 +12,8 @@
  *    5. Link back to SalesOrder for traceability
  */
 
+using MyERP.Services.Production.Constants;
+
 namespace MyERP.Services.Production.Models
 {
     /// <summary>
@@ -83,9 +85,27 @@ namespace MyERP.Services.Production.Models
         // ====================================
         // STATUS LIFECYCLE
         // ====================================
-        
+        // BOM Version Lock (from Monolith best practice)
+        public string? BomCode { get; set; }
+        public int? BomVersion { get; set; }
+
+        // Reservation Sub-State
+        public string? ReservationStatus { get; set; }       // null, Pending, Reserved, Failed
+        public string? ReservationFailReason { get; set; }
+        public int ReservationAttempts { get; set; } = 0;
+        public DateTime? LastReservationAttempt { get; set; }
+
+        // Release Audit
+        public DateTime? ReleasedAt { get; set; }
+        public Guid? ReleasedBy { get; set; }
+
+        // Cancel Tracking
+        public string? CancelReason { get; set; }
+        public DateTime? CancelledAt { get; set; }
+        public bool MaterialsReturned { get; set; } = false;
+
         /// <summary>
-        /// Status: Draft, Released, InProgress, Completed, Cancelled
+        /// Status: Create, Released, InProgress, Completed, Cancelled
         /// </summary>
         public string Status { get; set; } = ProductionOrderStatus.Create;
         
@@ -138,26 +158,9 @@ namespace MyERP.Services.Production.Models
         /// <summary>
         /// Status: Pending, Reserved, PartiallyReserved, Consumed
         /// </summary>
-        public string Status { get; set; } = "Pending";
+        public string Status { get; set; } = MaterialRequirementStatus.Pending;
         
         // Navigation
         public virtual ProductionOrder? ProductionOrder { get; set; }
-    }
-    
-    /// <summary>
-    /// Status constants for Production Order lifecycle
-    /// 
-    /// Industry Practice: State Machine
-    ///    Create → Released → InProgress → Completed
-    ///              ↓
-    ///          Cancelled (from any state except Completed)
-    /// </summary>
-    public static class ProductionOrderStatus
-    {
-        public const string Create = "Create";           // Just created, can edit
-        public const string Released = "Released";     // Approved, materials reserved
-        public const string InProgress = "InProgress"; // Production started
-        public const string Completed = "Completed";   // Finished
-        public const string Cancelled = "Cancelled";   // Cancelled
     }
 }

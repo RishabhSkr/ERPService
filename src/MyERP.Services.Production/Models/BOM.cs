@@ -32,7 +32,7 @@ namespace MyERP.Services.Production.Models
         /// Human-readable code: BOM-CHAIR-001
         /// 📝 Industry: Unique code for business users, separate from GUID
         /// </summary>
-        public string BOMCode { get; set; } = string.Empty;
+        public string BomCode { get; set; } = string.Empty;
         
         /// <summary>
         /// Denormalized product name for display
