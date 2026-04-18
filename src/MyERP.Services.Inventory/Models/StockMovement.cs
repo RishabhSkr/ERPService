@@ -23,6 +23,7 @@ namespace MyERP.Services.Inventory.Models
         // Reference
         public string? ReferenceType { get; set; } // SalesOrder, ProductionOrder, Purchase
         public Guid? ReferenceId { get; set; }
+        public Guid? WorkOrderId { get; set; }    // null = PO-level, has value = WO-level
         public string? Notes { get; set; }
         
         // Audit

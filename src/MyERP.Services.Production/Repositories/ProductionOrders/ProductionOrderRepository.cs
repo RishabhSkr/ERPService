@@ -89,5 +89,13 @@ namespace MyERP.Services.Production.Repositories.ProductionOrders
             await _context.SaveChangesAsync();
             return order;
         }
+
+        public async Task<IEnumerable<ProductionOrder>> GetBySalesOrderIdAsync(Guid salesOrderId)
+        {
+            return await _context.ProductionOrders
+                .Include(o => o.MaterialRequirements)
+                .Where(o => o.SalesOrderId == salesOrderId)
+                .ToListAsync();
+        }
     }
 }

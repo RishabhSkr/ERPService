@@ -3,14 +3,19 @@ using MyERP.Shared.Events;
 using MyERP.Services.Inventory.Data;
 using MyERP.Services.Inventory.DTOs.StockMovements;
 using MyERP.Services.Inventory.Services.StockMovements;
+using MyERP.Services.Inventory.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace MyERP.Services.Inventory.Events.Consumers;
 
 /// <summary>
-/// Handles COMPLETE flow — when production batch is finished:
+/// Handles COMPLETE flow — when production batch/WO is finished:
 /// 1. Consume raw materials (CurrentStock -= consumed, ReservedStock -= reserved)
 /// 2. Add finished goods to Product inventory (CurrentStock += QuantityGood)
+/// 3. Handle product scrap
+/// 4. Return unused materials
+/// 
+/// Supports both WO-level (WorkOrderId present) and PO-level (backward compatible)
 /// </summary>
 public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
 {
@@ -31,29 +36,47 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
     public async Task Consume(ConsumeContext<BatchConcludedEvent> context)
     {
         var @event = context.Message;
-        _logger.LogInformation("Received batch concluded for PO: {OrderNumber}", @event.ProductionOrderNumber);
+        _logger.LogInformation(
+            "Received batch concluded — PO: {PONumber}, WO: {WONumber}",
+            @event.ProductionOrderNumber, @event.WorkOrderNumber ?? "N/A (PO-level)");
 
-        // ─── Idempotency: check if already processed ───
-        var alreadyProcessed = await _context.StockMovements
-            .AnyAsync(sm => sm.ReferenceType == "ProductionOrder"
-                         && sm.ReferenceId == @event.ProductionOrderId
-                         && sm.MovementType == "OUT");
+        // ─── Idempotency: check by WorkOrderId if WO-level, else by PO ───
+        var alreadyProcessed = @event.WorkOrderId.HasValue
+            ? await _context.StockMovements
+                .AnyAsync(sm => sm.WorkOrderId == @event.WorkOrderId
+                             && sm.MovementType == MovementType.OUT)
+            : await _context.StockMovements
+                .AnyAsync(sm => sm.ReferenceType == ReferenceType.PRODUCTION_ORDER
+                             && sm.ReferenceId == @event.ProductionOrderId
+                             && sm.WorkOrderId == null
+                             && sm.MovementType == MovementType.OUT);
+
         if (alreadyProcessed)
         {
-            _logger.LogWarning("Batch already processed for PO {OrderNumber} — skipping",
-                @event.ProductionOrderNumber);
+            _logger.LogWarning("Batch already processed for {Target} — skipping",
+                @event.WorkOrderNumber ?? @event.ProductionOrderNumber);
             return;
         }
+
+        var targetLabel = @event.WorkOrderId.HasValue
+            ? $"WO: {@event.WorkOrderNumber}"
+            : $"PO: {@event.ProductionOrderNumber}";
 
         // ─── Step 1: Consume raw materials ───
         foreach (var material in @event.MaterialsConsumed)
         {
-            // Find original RESERVE movement (for WarehouseId)
-            var reservation = await _context.StockMovements
-                .FirstOrDefaultAsync(sm => sm.ReferenceType == "ProductionOrder"
-                                        && sm.ReferenceId == @event.ProductionOrderId
-                                        && sm.ItemId == material.RawMaterialId
-                                        && sm.MovementType == "RESERVE");
+            // Find original RESERVE movement — by WorkOrderId if WO-level
+            var reservation = @event.WorkOrderId.HasValue
+                ? await _context.StockMovements
+                    .FirstOrDefaultAsync(sm => sm.WorkOrderId == @event.WorkOrderId
+                                            && sm.ItemId == material.RawMaterialId
+                                            && sm.MovementType == MovementType.RESERVE)
+                : await _context.StockMovements
+                    .FirstOrDefaultAsync(sm => sm.ReferenceType == ReferenceType.PRODUCTION_ORDER
+                                            && sm.ReferenceId == @event.ProductionOrderId
+                                            && sm.ItemId == material.RawMaterialId
+                                            && sm.WorkOrderId == null
+                                            && sm.MovementType == MovementType.RESERVE);
 
             var warehouseId = reservation?.WarehouseId ?? Guid.Empty;
 
@@ -62,75 +85,89 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
                 {
-                    MovementType  = "RELEASE",
-                    ItemType      = "RawMaterial",
+                    MovementType  = MovementType.RELEASE,
+                    ItemType      = ItemType.RAW_MATERIAL,
                     ItemId        = material.RawMaterialId,
                     WarehouseId   = warehouseId,
                     Quantity      = material.QuantityConsumed,
-                    ReferenceType = "ProductionOrder",
+                    ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
-                    Notes         = $"Un-reserve (consumed) for {@event.ProductionOrderNumber}"
+                    WorkOrderId   = @event.WorkOrderId,
+                    Notes         = $"Un-reserve (consumed) for {targetLabel}",
+                    CreatedAt     = DateTime.UtcNow,
+                    CreatedBy     = SystemUser.Id
                 });
             }
 
             // B: Consume from stock (CurrentStock -= consumed)
             await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
             {
-                MovementType  = "OUT",
-                ItemType      = "RawMaterial",
+                MovementType  = MovementType.OUT,
+                ItemType      = ItemType.RAW_MATERIAL,
                 ItemId        = material.RawMaterialId,
                 WarehouseId   = warehouseId,
                 Quantity      = material.QuantityConsumed,
-                ReferenceType = "ProductionOrder",
+                ReferenceType = ReferenceType.PRODUCTION_ORDER,
                 ReferenceId   = @event.ProductionOrderId,
-                Notes         = $"Consumed in production: {@event.ProductionOrderNumber}"
+                WorkOrderId   = @event.WorkOrderId,
+                Notes         = $"Consumed in production: {targetLabel}",
+                CreatedAt     = DateTime.UtcNow,
+                CreatedBy     = SystemUser.Id
             });
 
-            _logger.LogInformation("Consumed {Qty} of {MaterialCode} for PO {OrderNumber}",
-                material.QuantityConsumed, material.MaterialCode, @event.ProductionOrderNumber);
+            _logger.LogInformation("Consumed {Qty} of {MaterialCode} for {Target}",
+                material.QuantityConsumed, material.MaterialCode, targetLabel);
 
             // C: Return unused material (if any)
             if (material.QuantityReturned > 0)
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
                 {
-                    MovementType  = "RELEASE",
-                    ItemType      = "RawMaterial",
+                    MovementType  = MovementType.RELEASE,
+                    ItemType      = ItemType.RAW_MATERIAL,
                     ItemId        = material.RawMaterialId,
                     WarehouseId   = warehouseId,
                     Quantity      = material.QuantityReturned,
-                    ReferenceType = "ProductionOrder",
+                    ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
-                    Notes         = $"Unused material returned: {@event.ProductionOrderNumber}"
+                    WorkOrderId   = @event.WorkOrderId,
+                    Notes         = $"Unused material returned: {targetLabel}",
+                    CreatedAt     = DateTime.UtcNow,
+                    CreatedBy     = SystemUser.Id
                 });
+
+                _logger.LogInformation("Returned {Qty} unused {MaterialCode} for {Target}",
+                    material.QuantityReturned, material.MaterialCode, targetLabel);
             }
         }
 
         // ─── Step 2: Add finished goods to Product inventory ───
         if (@event.QuantityGood > 0)
         {
-            // Find any warehouse for this product (or use first warehouse)
             var warehouse = await _context.Warehouses.FirstOrDefaultAsync();
             if (warehouse != null)
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
                 {
-                    MovementType  = "IN",
-                    ItemType      = "Product",
+                    MovementType  = MovementType.IN,
+                    ItemType      = ItemType.PRODUCT,
                     ItemId        = @event.ProductId,
                     WarehouseId   = warehouse.Id,
                     Quantity      = @event.QuantityGood,
-                    ReferenceType = "ProductionOrder",
+                    ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
-                    Notes         = $"Finished goods from: {@event.ProductionOrderNumber}"
+                    WorkOrderId   = @event.WorkOrderId,
+                    Notes         = $"Finished goods from: {targetLabel}",
+                    CreatedAt     = DateTime.UtcNow,
+                    CreatedBy     = SystemUser.Id
                 });
 
-                _logger.LogInformation("Added {Qty} finished goods of {ProductCode} for PO {OrderNumber}",
-                    @event.QuantityGood, @event.ProductCode, @event.ProductionOrderNumber);
+                _logger.LogInformation("Added {Qty} finished goods of {ProductCode} for {Target}",
+                    @event.QuantityGood, @event.ProductCode, targetLabel);
             }
         }
 
-        // ─── Step 3: Handle scrap ───
+        // ─── Step 3: Handle product scrap ───
         if (@event.QuantityScrap > 0)
         {
             var warehouse = await _context.Warehouses.FirstOrDefaultAsync();
@@ -138,18 +175,21 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
                 {
-                    MovementType  = "SCRAP",
-                    ItemType      = "Product",
+                    MovementType  = MovementType.SCRAP,
+                    ItemType      = ItemType.PRODUCT,
                     ItemId        = @event.ProductId,
                     WarehouseId   = warehouse.Id,
                     Quantity      = @event.QuantityScrap,
-                    ReferenceType = "ProductionOrder",
+                    ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
-                    Notes         = $"Scrap from production: {@event.ProductionOrderNumber}"
+                    WorkOrderId   = @event.WorkOrderId,
+                    Notes         = $"Scrap from production: {targetLabel}",
+                    CreatedAt     = DateTime.UtcNow,
+                    CreatedBy     = SystemUser.Id
                 });
             }
         }
 
-        _logger.LogInformation("Batch concluded processing complete for PO: {OrderNumber}", @event.ProductionOrderNumber);
+        _logger.LogInformation("Batch concluded processing complete for {Target}", targetLabel);
     }
 }

@@ -103,11 +103,14 @@ namespace MyERP.Shared.Events
         public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
         public string EventType { get; set; } = "ProductionOrderCancelled";
         
+        public Guid? SalesOrderId{get; set;}
+        public string? SalesOrderNumber {get;set;}
+        
         public Guid ProductionOrderId { get; set; }
         public string ProductionOrderNumber { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
     }
-
+    
     /// <summary>
     /// Published by Production when batch is complete.
     /// Consumed by Inventory to add finished goods.
@@ -120,6 +123,14 @@ namespace MyERP.Shared.Events
         
         public Guid ProductionOrderId { get; set; }
         public string ProductionOrderNumber { get; set; } = string.Empty;
+
+        public Guid? SalesOrderId { get; set; }        
+        public string? SalesOrderNumber { get; set; }
+
+        // WO-level completion (nullable = backward compatible with PO-level)
+        public Guid? WorkOrderId { get; set; }
+        public string? WorkOrderNumber { get; set; }
+
         public Guid ProductId { get; set; }
         public string ProductCode { get; set; } = string.Empty;
         public decimal QuantityGood { get; set; }
@@ -146,6 +157,10 @@ namespace MyERP.Shared.Events
         public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
         public string EventType { get; set; } = "MaterialReturnRequested";
         
+        // WO-level return (nullable = backward compatible with PO-level)
+        public Guid? WorkOrderId { get; set; }
+        public string? WorkOrderNumber { get; set; }
+
         public Guid ProductionOrderId { get; set; }
         public string ProductionOrderNumber { get; set; } = string.Empty;
         public List<MaterialConsumed> MaterialsConsumed { get; set; } = new();

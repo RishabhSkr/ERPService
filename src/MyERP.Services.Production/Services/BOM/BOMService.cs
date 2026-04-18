@@ -114,6 +114,10 @@ namespace MyERP.Services.Production.Services.BOM
                 }
             }
 
+            // Auto-increment version when lines change
+            if (dto.Lines != null)
+                bom.Version++;
+
             bom.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(bom);
             

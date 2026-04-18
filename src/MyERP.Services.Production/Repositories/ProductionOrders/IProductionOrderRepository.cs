@@ -15,5 +15,7 @@ namespace MyERP.Services.Production.Repositories.ProductionOrders
         Task<string> GetNextOrderNumberAsync();
         Task<ProductionOrder> CreateAsync(ProductionOrder order);
         Task<ProductionOrder> UpdateAsync(ProductionOrder order);
+        Task<IEnumerable<ProductionOrder>> GetBySalesOrderIdAsync(Guid salesOrderId);
+
     }
 }

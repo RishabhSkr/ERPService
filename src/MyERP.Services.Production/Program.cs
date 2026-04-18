@@ -170,6 +170,8 @@ builder.Services.AddMassTransit(x =>
         .Endpoint(e => e.Name = "sales-order-created");  // Explicit queue name
     
     x.AddConsumer<StockReservedConsumer>();
+    x.AddConsumer<SalesOrderCancelledConsumer>()
+    .Endpoint(e => e.Name = "sales-order-cancelled");
     
     // Configure RabbitMQ
     var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";

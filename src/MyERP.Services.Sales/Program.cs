@@ -11,6 +11,7 @@ using MyERP.Services.Sales.Services.External;
 using MyERP.Services.Sales.Validators;
 using MyERP.Services.Sales.Authorization;
 using Microsoft.AspNetCore.Authorization;
+using MyERP.Services.Sales.Events.Consumers;
 using MassTransit;
 using MyERP.Services.Sales.Events.Producers.Publishers.MassTransit;
 
@@ -95,7 +96,12 @@ builder.Services.AddMassTransit(x =>
 {
     // NO consumers here - Sales only publishes
     // Production service will consume SalesOrderCreatedEvent
-    
+    x.AddConsumer<BatchConcludedConsumer>()
+    .Endpoint(e => e.Name = "sales-batch-concluded");
+
+    x.AddConsumer<ProductionCancelledConsumer>()
+    .Endpoint(e => e.Name = "sales-production-cancelled");
+
     // Configure RabbitMQ
     var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
     x.UsingRabbitMq((context, cfg) =>

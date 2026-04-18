@@ -1,0 +1,209 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Box, Search, RefreshCw, AlertCircle, PackagePlus, X } from 'lucide-react';
+import useApi from '../../hooks/useApi';
+import { getFinishedGoodsStock } from '../../api/finishedGoodsInventoryServices';
+import { recordStockMovement } from '../../api/inventoryService';
+import toast from 'react-hot-toast';
+
+/**
+ * Finished Goods Inventory — Stock overview + Add Stock per item
+ * 
+ * ProductListDto: { id, productCode, productName, categoryName, price, currentStock, reservedStock, availableStock, unitName, isActive }
+ * RecordStockMovement: POST /stock-movements/record { movementType: 'IN', itemType: 'Product', itemId, warehouseId, quantity, notes }
+ */
+const FinishedGoodStock = () => {
+    const [stockData, setStockData] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const { loading, requestHandlerFunction } = useApi();
+    const [stockItem, setStockItem] = useState(null);
+    const [stockForm, setStockForm] = useState({ warehouseId: 'b1111111-1111-1111-1111-111111111111', quantity: '', batchNumber: '' });
+
+    const fetchStock = useCallback(async () => {
+        const response = await requestHandlerFunction(() => getFinishedGoodsStock());
+        if (response.success) {
+            const pagedData = response.data?.data || response.data || {};
+            const items = pagedData?.data || (Array.isArray(pagedData) ? pagedData : []);
+            setStockData(Array.isArray(items) ? items : []);
+        }
+    }, [requestHandlerFunction]);
+
+    useEffect(() => { fetchStock(); }, [fetchStock]);
+
+    const filteredStock = stockData.filter(item =>
+        (item.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.productCode || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleAddStock = async (e) => {
+        e.preventDefault();
+        if (!stockForm.quantity || parseFloat(stockForm.quantity) <= 0) return toast.error('Enter valid quantity');
+        try {
+            await recordStockMovement({
+                movementType: 'IN',
+                itemType: 'Product',
+                itemId: stockItem.id,
+                warehouseId: stockForm.warehouseId,
+                quantity: parseFloat(stockForm.quantity),
+                notes: stockForm.batchNumber ? `Batch: ${stockForm.batchNumber}` : 'Manual stock addition',
+            });
+            toast.success('Stock added!');
+            setStockItem(null);
+            fetchStock();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to add stock');
+        }
+    };
+
+    const getStockStatusColor = (qty) => {
+        if (qty === 0) return 'bg-red-100 text-red-700 border-red-200';
+        if (qty < 10) return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        return 'bg-green-100 text-green-700 border-green-200';
+    };
+
+    return (
+        <div className="p-6 max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <Box className="text-blue-600" /> Finished Goods Inventory
+                    </h1>
+                    <p className="text-sm text-gray-500 mt-1">Stock levels and inventory management for finished products</p>
+                </div>
+                <div className="flex gap-2 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search by name or code..."
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <button onClick={fetchStock} disabled={loading}
+                        className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 disabled:opacity-50">
+                        <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Total Products</p>
+                    <p className="text-2xl font-bold text-slate-800 mt-1">{stockData.length}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Active</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">{stockData.filter(i => i.isActive).length}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Low Stock</p>
+                    <p className="text-2xl font-bold text-yellow-600 mt-1">{stockData.filter(i => (i.availableStock ?? 0) < 10 && (i.availableStock ?? 0) > 0).length}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-slate-500 uppercase font-semibold">Out of Stock</p>
+                    <p className="text-2xl font-bold text-red-600 mt-1">{stockData.filter(i => (i.availableStock ?? 0) === 0).length}</p>
+                </div>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-bold border-b border-gray-200">
+                        <tr>
+                            <th className="px-4 py-3">Code</th>
+                            <th className="px-4 py-3">Product Name</th>
+                            <th className="px-4 py-3">Category</th>
+                            <th className="px-4 py-3">Unit</th>
+                            <th className="px-4 py-3 text-right">Price</th>
+                            <th className="px-4 py-3 text-center">Current Stock</th>
+                            <th className="px-4 py-3 text-center">Reserved</th>
+                            <th className="px-4 py-3 text-center">Available</th>
+                            <th className="px-4 py-3 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                        {loading && stockData.length === 0 ? (
+                            <tr><td colSpan="9" className="p-8 text-center text-gray-500">
+                                <div className="flex justify-center items-center gap-2">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div> Loading...
+                                </div>
+                            </td></tr>
+                        ) : filteredStock.length === 0 ? (
+                            <tr><td colSpan="9" className="p-10 text-center text-gray-400">
+                                <Box size={40} className="opacity-20 mx-auto mb-2" />
+                                <p>No products found in stock.</p>
+                            </td></tr>
+                        ) : filteredStock.map(item => (
+                            <tr key={item.id} className={`hover:bg-slate-50 transition-colors ${!item.isActive ? 'opacity-50' : ''}`}>
+                                <td className="px-4 py-3 font-mono font-semibold text-slate-700">{item.productCode}</td>
+                                <td className="px-4 py-3 font-medium text-slate-800">{item.productName}</td>
+                                <td className="px-4 py-3 text-slate-600">{item.categoryName || '-'}</td>
+                                <td className="px-4 py-3 text-slate-600">{item.unitName || '-'}</td>
+                                <td className="px-4 py-3 text-right text-slate-600">₹{item.price?.toLocaleString('en-IN')}</td>
+                                <td className="px-4 py-3 text-center font-medium">{item.currentStock ?? 0}</td>
+                                <td className="px-4 py-3 text-center text-orange-600">{item.reservedStock ?? 0}</td>
+                                <td className="px-4 py-3 text-center">
+                                    <span className={`px-3 py-1 rounded-full font-bold text-sm border ${getStockStatusColor(item.availableStock ?? 0)}`}>
+                                        {(item.availableStock ?? 0).toLocaleString()}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                    <button onClick={() => { setStockItem(item); setStockForm({ warehouseId: 'b1111111-1111-1111-1111-111111111111', quantity: '', batchNumber: '' }); }}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-lg transition-colors">
+                                        <PackagePlus size={14} /> Add Stock
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                <div className="bg-gray-50 p-3 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
+                    <span>Showing {filteredStock.length} of {stockData.length} products</span>
+                    <span className="flex items-center gap-1"><AlertCircle size={12} /> Stock updates automatically on production completion</span>
+                </div>
+            </div>
+
+            {/* Add Stock Modal */}
+            {stockItem && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                        <div className="flex items-center justify-between p-5 border-b">
+                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <PackagePlus className="text-green-500" size={20} /> Add Stock
+                            </h2>
+                            <button onClick={() => setStockItem(null)} className="p-1.5 rounded-lg hover:bg-slate-100"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleAddStock} className="p-5 space-y-4">
+                            <div className="bg-blue-50 rounded-lg p-3 text-sm">
+                                <span className="font-bold text-blue-700">{stockItem.productCode}</span>
+                                <span className="text-slate-500 ml-2">{stockItem.productName}</span>
+                                <p className="text-xs text-slate-400 mt-1">Current: {stockItem.currentStock ?? 0} | Available: {stockItem.availableStock ?? 0} {stockItem.unitName}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
+                                <input type="number" step="any" min="0.01" value={stockForm.quantity} onChange={(e) => setStockForm({...stockForm, quantity: e.target.value})}
+                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" required placeholder="e.g. 500" autoFocus />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Batch Number</label>
+                                <input type="text" value={stockForm.batchNumber} onChange={(e) => setStockForm({...stockForm, batchNumber: e.target.value})}
+                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" placeholder="BATCH-2024-001" />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setStockItem(null)} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm">Cancel</button>
+                                <button type="submit" className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">
+                                    <PackagePlus size={16} /> Add Stock
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default FinishedGoodStock;

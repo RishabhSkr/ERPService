@@ -9,6 +9,9 @@ namespace MyERP.Services.Inventory.DTOs.StockMovements
         public decimal Quantity { get; set; }
         public string? ReferenceType { get; set; } // SalesOrder, ProductionOrder, Purchase
         public Guid? ReferenceId { get; set; }
+        public Guid? WorkOrderId { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public Guid? CreatedBy { get; set; }
         public string? Notes { get; set; }
     }
 }

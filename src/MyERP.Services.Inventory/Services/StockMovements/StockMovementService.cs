@@ -6,6 +6,7 @@ using MyERP.Services.Inventory.Repositories.Inventory;
 using MyERP.Services.Inventory.Repositories.Products;
 using MyERP.Services.Inventory.Repositories.RawMaterials;
 using MyERP.Services.Inventory.Repositories.Warehouses;
+using MyERP.Services.Inventory.Constants;
 
 namespace MyERP.Services.Inventory.Services.StockMovements
 {
@@ -71,19 +72,19 @@ namespace MyERP.Services.Inventory.Services.StockMovements
                 // Apply movement
                 switch (dto.MovementType.ToUpper())
                 {
-                    case "IN":
+                    case MovementType.IN:
                         inventory.CurrentStock += dto.Quantity;
                         break;
-                    case "OUT":
+                    case MovementType.OUT:
                         inventory.CurrentStock -= dto.Quantity;
                         break;
-                    case "RESERVE":
+                    case MovementType.RESERVE:
                         inventory.ReservedStock += dto.Quantity;
                         break;
-                    case "RELEASE":
+                    case MovementType.RELEASE:
                         inventory.ReservedStock -= dto.Quantity;
                         break;
-                    case "ADJUST":
+                    case MovementType.ADJUST:
                         inventory.CurrentStock = dto.Quantity;
                         break;
                     default:
@@ -133,16 +134,16 @@ namespace MyERP.Services.Inventory.Services.StockMovements
                 // Apply movement
                 switch (dto.MovementType.ToUpper())
                 {
-                    case "IN":
+                    case MovementType.IN:
                         inventory.CurrentStock += dto.Quantity;
                         break;
-                    case "OUT":
+                    case MovementType.OUT:
                         if (inventory.CurrentStock < dto.Quantity)
                             throw new BadRequestException(
                                 $"Insufficient stock. Need {dto.Quantity}, current {inventory.CurrentStock}");
                         inventory.CurrentStock -= dto.Quantity;
                         break;
-                    case "RESERVE":
+                    case MovementType.RESERVE:
                         // Check: AvailableStock (CurrentStock - ReservedStock) >= Quantity?
                         var available = inventory.CurrentStock - inventory.ReservedStock;
                         if (available < dto.Quantity)
@@ -150,13 +151,13 @@ namespace MyERP.Services.Inventory.Services.StockMovements
                                 $"Insufficient available stock. Need {dto.Quantity}, available {available}");
                         inventory.ReservedStock += dto.Quantity;
                         break;
-                    case "RELEASE":
+                    case MovementType.RELEASE:
                         inventory.ReservedStock -= dto.Quantity;
                         break;
-                    case "ADJUST":
+                    case MovementType.ADJUST:
                         inventory.CurrentStock = dto.Quantity;
                         break;
-                    case "SCRAP":
+                    case MovementType.SCRAP:
                         inventory.CurrentStock -= dto.Quantity;
                         break;
                     default:
@@ -187,6 +188,7 @@ namespace MyERP.Services.Inventory.Services.StockMovements
                 StockAfter = stockAfter,
                 ReferenceType = dto.ReferenceType,
                 ReferenceId = dto.ReferenceId,
+                WorkOrderId = dto.WorkOrderId,
                 Notes = dto.Notes,
                 CreatedBy = userId,
                 CreatedAt = DateTime.UtcNow
