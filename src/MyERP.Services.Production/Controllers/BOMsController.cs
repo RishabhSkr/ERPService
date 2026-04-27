@@ -22,7 +22,7 @@ namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production/[controller]")]
-    // [Authorize] // Uncomment when JWT is set up
+    [Authorize]
     public class BOMsController : ControllerBase
     {
         private readonly IBOMService _service;

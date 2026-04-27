@@ -15,6 +15,7 @@ namespace MyERP.Services.Production.Services.ProductionOrders
         Task StartAsync(Guid id);
         Task UpdateProgressAsync(Guid id, UpdateProgressDto dto);
         Task CompleteAsync(Guid id, CompleteBatchDto dto);
+        Task ForceCompleteAsync(Guid id);
         Task CancelAsync(Guid id, string reason);
         Task RetryReservationAsync(Guid id);
         // Release

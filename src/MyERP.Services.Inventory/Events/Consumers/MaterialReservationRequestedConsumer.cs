@@ -74,52 +74,92 @@ public class MaterialReservationRequestedConsumer : IConsumer<MaterialReservatio
         bool allSuccess = true;
         string? failReason = null;
 
-        // ─── STEP 4: Har material check karo ───
-        foreach (var material in @event.Materials)
+        try
         {
-            // A: Get inventories across all warehouses
-            var inventories = await _rawMaterialRepo.GetInventoriesAsync(material.RawMaterialId);
-            var totalAvailable = inventories.Sum(i => i.AvailableStock);
-
-            // B: Check — kya enough stock hai?
-            if (totalAvailable < material.Quantity)
+            // ─── STEP 4: Har material check karo ───
+            foreach (var material in @event.Materials)
             {
-                allSuccess = false;
-                failReason = $"Insufficient stock for {material.MaterialCode}: " +
-                             $"need {material.Quantity}, available {totalAvailable}";
-                break;
+                // A: Get inventories across all warehouses
+                var inventories = await _rawMaterialRepo.GetInventoriesAsync(material.RawMaterialId);
+                var totalAvailable = inventories.Sum(i => i.AvailableStock);
+
+                // B: Check — kya enough stock hai?
+                if (totalAvailable < material.Quantity)
+                {
+                    allSuccess = false;
+                    failReason = $"Insufficient stock for {material.MaterialCode}: " +
+                                 $"need {material.Quantity}, available {totalAvailable}";
+                    break;
+                }
+
+                // C: Waterfall Allocation — split across locations if needed
+                var remaining = material.Quantity;
+                var sortedInventories = inventories
+                    .Where(i => i.AvailableStock > 0)
+                    .OrderByDescending(i => i.AvailableStock)
+                    .ToList();
+
+                foreach (var inv in sortedInventories)
+                {
+                    if (remaining <= 0) break;
+
+                    var allocate = Math.Min(remaining, inv.AvailableStock);
+
+                    var notes = @event.WorkOrderId.HasValue
+                        ? $"Reserved for {@event.ProductionOrderNumber} / WO: {@event.WorkOrderNumber}"
+                        : $"Reserved for {@event.ProductionOrderNumber}";
+
+                    if (!string.IsNullOrEmpty(@event.BomCode))
+                    {
+                        notes += $" (BOM: {@event.BomCode} v{@event.BomVersion})";
+                    }
+
+                    if (sortedInventories.Count > 1)
+                    {
+                        notes += $" [Split: {allocate} of {material.Quantity}]";
+                    }
+
+                    await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
+                    {
+                        MovementType  = MovementType.RESERVE,
+                        ItemType      = ItemType.RAW_MATERIAL,
+                        ItemId        = material.RawMaterialId,
+                        StorageLocationId   = inv.StorageLocationId,
+                        Quantity      = allocate,
+                        ReferenceType = ReferenceType.PRODUCTION_ORDER,
+                        ReferenceId   = @event.ProductionOrderId,
+                        WorkOrderId   = @event.WorkOrderId,
+                        Notes         = notes,
+                        CreatedAt     = DateTime.UtcNow,
+                        CreatedBy     = SystemUser.Id
+                    });
+
+                    remaining -= allocate;
+
+                    _logger.LogInformation(
+                        "Reserved {Qty} of {MaterialCode} from Location {LocId} (remaining: {Remaining})",
+                        allocate, material.MaterialCode, inv.StorageLocationId, remaining);
+                }
+
+                // D: Track reserved
+                reservedMaterials.Add(new ReservedMaterial
+                {
+                    RawMaterialId = material.RawMaterialId,
+                    QuantityReserved = material.Quantity
+                });
             }
-
-            // C: Reserve — WorkOrderId bhi pass karo
-            var firstInventory = inventories.First(i => i.AvailableStock > 0);
-            var notes = @event.WorkOrderId.HasValue
-                ? $"Reserved for {  @event.ProductionOrderNumber} / WO: {@event.WorkOrderNumber}"
-                : $"Reserved for {@event.ProductionOrderNumber}";
-
-            await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
-            {
-                MovementType  = MovementType.RESERVE,
-                ItemType      = ItemType.RAW_MATERIAL,
-                ItemId        = material.RawMaterialId,
-                WarehouseId   = firstInventory.WarehouseId,
-                Quantity      = material.Quantity,
-                ReferenceType = ReferenceType.PRODUCTION_ORDER,
-                ReferenceId   = @event.ProductionOrderId,
-                WorkOrderId   = @event.WorkOrderId,      // KEY: WO-level tracking!
-                Notes         = notes,
-                CreatedAt     = DateTime.UtcNow,
-                CreatedBy     = SystemUser.Id
-            });
-
-            // D: Track reserved
-            reservedMaterials.Add(new ReservedMaterial
-            {
-                RawMaterialId = material.RawMaterialId,
-                QuantityReserved = material.Quantity
-            });
+        }
+        catch (Exception ex)
+        {
+            // Gracefully handle — don't let exceptions crash the consumer
+            allSuccess = false;
+            failReason = ex.Message;
+            _logger.LogError(ex, "Reservation failed for {Target}: {Error}",
+                @event.WorkOrderId.HasValue ? @event.WorkOrderNumber : @event.ProductionOrderNumber,
+                ex.Message);
         }
 
-        // ─── STEP 5: Response — forward WorkOrderId back! ───
+        // ─── STEP 5: Response — ALWAYS publish result (success or failure) ───
         await _publishEndpoint.Publish(new StockReservedEvent
         {
             ProductionOrderId = @event.ProductionOrderId,

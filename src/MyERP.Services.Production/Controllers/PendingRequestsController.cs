@@ -13,7 +13,7 @@ namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production/pending-requests")]
-    // [Authorize] // Uncomment when JWT is set up
+    [Authorize]
     public class PendingRequestsController : ControllerBase
     {
         private readonly IPendingRequestService _service;

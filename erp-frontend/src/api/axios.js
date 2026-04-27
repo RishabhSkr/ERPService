@@ -26,9 +26,9 @@ const createApiInstance = (baseURL, serviceName) => {
 };
 
 // Service instances
-export const salesApi = createApiInstance('http://localhost:5002/api', 'Sales');
-export const productionApi = createApiInstance('http://localhost:5006/api', 'Production');
-export const inventoryApi = createApiInstance('http://localhost:5004/api', 'Inventory');
+export const salesApi = createApiInstance('http://localhost:5000/api', 'Sales');
+export const productionApi = createApiInstance('http://localhost:5000/api', 'Production');
+export const inventoryApi = createApiInstance('http://localhost:5000/api', 'Inventory');
 
 // Default export (backward compatibility — points to Production for now)
 export default productionApi;

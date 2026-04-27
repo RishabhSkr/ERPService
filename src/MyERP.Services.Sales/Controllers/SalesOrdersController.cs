@@ -8,7 +8,7 @@ namespace MyERP.Services.Sales.Controllers
 {
     [ApiController]
     [Route("api/sales/orders")]
-    // [Authorize(Policy = "DynamicPermission")]
+    [Authorize]
     public class SalesOrdersController : ControllerBase
     {
         private readonly ISalesOrderService _orderService;

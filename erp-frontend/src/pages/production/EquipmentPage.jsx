@@ -5,6 +5,7 @@ import {
     getEquipment, createEquipment, updateEquipment, deleteEquipment,
     getWorkCenters, getProcesses, linkProcesses, getLinkedProcesses
 } from '../../api/productionService';
+import SearchSelect from '../../components/common/SearchSelect';
 
 /**
  * Equipment CRUD + Link Processes
@@ -243,13 +244,21 @@ const EquipmentPage = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Work Center *</label>
-                                <select value={formData.workCenterId} onChange={(e) => setFormData({...formData, workCenterId: e.target.value})}
-                                    className="w-full px-3 py-2.5 border rounded-lg text-sm bg-white" required>
-                                    <option value="">Select Work Center...</option>
-                                    {workCenters.map(wc => (
-                                        <option key={wc.workCenterId} value={wc.workCenterId}>{wc.centerName} ({wc.centerCode})</option>
-                                    ))}
-                                </select>
+                                <SearchSelect
+                                    value={formData.workCenterId}
+                                    displayValue={(() => { const wc = workCenters.find(w => w.workCenterId === formData.workCenterId); return wc ? `${wc.centerName} (${wc.centerCode})` : ''; })()}
+                                    placeholder="Search work center..."
+                                    items={workCenters}
+                                    title="Select Work Center"
+                                    displayFields={[
+                                        { key: 'centerCode', label: 'Code', width: '30%', bold: true },
+                                        { key: 'centerName', label: 'Name', width: '70%' },
+                                    ]}
+                                    searchKeys={['centerCode', 'centerName']}
+                                    valueKey="workCenterId"
+                                    onSelect={(wc) => setFormData({...formData, workCenterId: wc.workCenterId})}
+                                    required
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>

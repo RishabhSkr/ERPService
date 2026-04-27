@@ -18,6 +18,7 @@ namespace MyERP.Services.Inventory.Repositories.RawMaterials
             return await _context.RawMaterials
                 .Include(r => r.Category)
                 .Include(r => r.Unit)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(r => r.Id == id);
         }
 
@@ -28,6 +29,7 @@ namespace MyERP.Services.Inventory.Repositories.RawMaterials
                 .Include(r => r.Unit)
                 .Include(r => r.RawMaterialInventories!)
                     .ThenInclude(ri => ri.Warehouse)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(r => r.Id == id);
         }
 
@@ -42,7 +44,12 @@ namespace MyERP.Services.Inventory.Repositories.RawMaterials
             var query = _context.RawMaterials
                 .Include(r => r.Category)
                 .Include(r => r.Unit)
-                .Include(r => r.RawMaterialInventories)
+                .Include(r => r.RawMaterialInventories!)
+                    .ThenInclude(ri => ri.StorageLocation)
+                .Include(r => r.RawMaterialInventories!)
+                    .ThenInclude(ri => ri.Warehouse)
+                .Include(r => r.DefaultStorageLocation)
+                .AsSplitQuery()
                 .Where(r => r.IsActive)
                 .AsQueryable();
 
@@ -91,12 +98,12 @@ namespace MyERP.Services.Inventory.Repositories.RawMaterials
             await _context.SaveChangesAsync();
         }
 
-        public async Task<RawMaterialInventory?> GetInventoryAsync(Guid rawMaterialId, Guid warehouseId, string? batchNumber = null)
+        public async Task<RawMaterialInventory?> GetInventoryAsync(Guid rawMaterialId, Guid storageLocationId, string? batchNumber = null)
         {
             return await _context.RawMaterialInventories
                 .Include(i => i.RawMaterial)
                 .FirstOrDefaultAsync(i => i.RawMaterialId == rawMaterialId 
-                       && i.WarehouseId == warehouseId 
+                       && i.StorageLocationId == storageLocationId 
                        && (batchNumber == null || i.BatchNumber == batchNumber));
         }
 

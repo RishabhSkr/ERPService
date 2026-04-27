@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Plus, Loader } from 'lucide-react';
 import useApi from '../../hooks/useApi';
 import { getWOPlanningInfo, createWorkOrder } from '../../api/productionService';
+import SearchSelect from '../common/SearchSelect';
 
 const CreateWOModal = ({ poId, onClose, onCreated }) => {
     const [planningInfo, setPlanningInfo] = useState(null);
@@ -75,15 +76,21 @@ const CreateWOModal = ({ poId, onClose, onCreated }) => {
                         {/* Step Selection */}
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Select Step *</label>
-                            <select value={selectedStepId} onChange={(e) => { setSelectedStepId(e.target.value); setWorkCenterId(''); }}
-                                className="w-full border rounded-lg px-3 py-2 text-sm" required>
-                                <option value="">Choose a step...</option>
-                                {(planningInfo.steps || []).map(step => (
-                                    <option key={step.processRouteStepId} value={step.processRouteStepId}>
-                                        Step #{step.stepNumber} — {step.processName} (Remaining: {step.remainingQuantity})
-                                    </option>
-                                ))}
-                            </select>
+                            <SearchSelect
+                                value={selectedStepId}
+                                displayValue={(() => { const s = (planningInfo.steps || []).find(s => s.processRouteStepId === selectedStepId); return s ? `Step #${s.stepNumber} — ${s.processName} (Remaining: ${s.remainingQuantity})` : ''; })()}
+                                placeholder="Choose a step..."
+                                items={(planningInfo.steps || []).map(s => ({...s, _label: `Step #${s.stepNumber} — ${s.processName}`, _remaining: `Remaining: ${s.remainingQuantity}`}))}
+                                title="Select Process Step"
+                                displayFields={[
+                                    { key: 'stepNumber', label: '#', width: '10%', bold: true },
+                                    { key: 'processName', label: 'Process', width: '50%' },
+                                    { key: 'remainingQuantity', label: 'Remaining', width: '20%' },
+                                ]}
+                                searchKeys={['processName', 'stepNumber']}
+                                valueKey="processRouteStepId"
+                                onSelect={(s) => { setSelectedStepId(s.processRouteStepId); setWorkCenterId(''); }}
+                            />
                         </div>
 
                         {/* Step Details */}
@@ -121,13 +128,20 @@ const CreateWOModal = ({ poId, onClose, onCreated }) => {
                         {selectedStep && (
                             <div>
                                 <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Work Center *</label>
-                                <select value={workCenterId} onChange={(e) => setWorkCenterId(e.target.value)}
-                                    className="w-full border rounded-lg px-3 py-2 text-sm" required>
-                                    <option value="">Choose work center...</option>
-                                    {workCenters.map(wc => (
-                                        <option key={wc.id} value={wc.id}>{wc.code}</option>
-                                    ))}
-                                </select>
+                                <SearchSelect
+                                    value={workCenterId}
+                                    displayValue={(() => { const wc = workCenters.find(w => w.id === workCenterId); return wc ? wc.code : ''; })()}
+                                    placeholder="Choose work center..."
+                                    items={workCenters}
+                                    title="Select Work Center"
+                                    displayFields={[
+                                        { key: 'code', label: 'Code', width: '100%', bold: true },
+                                    ]}
+                                    searchKeys={['code']}
+                                    valueKey="id"
+                                    onSelect={(wc) => setWorkCenterId(wc.id)}
+                                    size="sm"
+                                />
                             </div>
                         )}
 

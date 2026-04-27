@@ -14,6 +14,9 @@ namespace MyERP.Services.Inventory.Models
         public Guid UnitId { get; set; }
         public Unit? Unit { get; set; }
         
+        public Guid? DefaultStorageLocationId { get; set; }
+        public StorageLocation? DefaultStorageLocation { get; set; }
+        
         public decimal Price { get; set; }
         public decimal MinStockLevel { get; set; } = 0;
         public bool IsActive { get; set; } = true;

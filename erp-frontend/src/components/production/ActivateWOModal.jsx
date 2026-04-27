@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { X, Zap, Loader } from 'lucide-react';
 import useApi from '../../hooks/useApi';
 import { getWOPlanningInfo, activateWO } from '../../api/productionService';
+import SearchSelect from '../common/SearchSelect';
 
 const ActivateWOModal = ({ workOrder, onClose, onActivated }) => {
     const [equipment, setEquipment] = useState([]);
     const [selectedEquipmentId, setSelectedEquipmentId] = useState('');
-    const [operator, setOperator] = useState('');
     const [notes, setNotes] = useState('');
+    // TODO: Replace with actual logged-in user from auth context
+    const currentUser = 'System User';
     const { loading, requestHandlerFunction } = useApi();
 
     // Fetch available equipment for this WO's step
@@ -30,11 +32,11 @@ const ActivateWOModal = ({ workOrder, onClose, onActivated }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedEquipmentId || !operator) return;
+        if (!selectedEquipmentId) return;
 
         const payload = {
             equipmentId: selectedEquipmentId,
-            activatedBy: operator,
+            activatedBy: currentUser,
             notes: notes || null,
         };
 
@@ -74,15 +76,22 @@ const ActivateWOModal = ({ workOrder, onClose, onActivated }) => {
                                 {loading ? <><Loader size={14} className="animate-spin" /> Loading equipment...</> : 'No compatible equipment found'}
                             </div>
                         ) : (
-                            <select value={selectedEquipmentId} onChange={(e) => setSelectedEquipmentId(e.target.value)}
-                                className="w-full border rounded-lg px-3 py-2 text-sm" required>
-                                <option value="">Choose equipment...</option>
-                                {equipment.map(eq => (
-                                    <option key={eq.equipmentId} value={eq.equipmentId}>
-                                        {eq.equipmentCode} — {eq.equipmentName} ({eq.workCenterCode}) {eq.status !== 'Active' ? `[${eq.status}]` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                            <SearchSelect
+                                value={selectedEquipmentId}
+                                displayValue={(() => { const eq = equipment.find(e => e.equipmentId === selectedEquipmentId); return eq ? `${eq.equipmentCode} — ${eq.equipmentName} (${eq.workCenterCode})` : ''; })()}
+                                placeholder="Choose equipment..."
+                                items={equipment}
+                                title="Select Equipment"
+                                displayFields={[
+                                    { key: 'equipmentCode', label: 'Code', width: '25%', bold: true },
+                                    { key: 'equipmentName', label: 'Name', width: '40%' },
+                                    { key: 'workCenterCode', label: 'Work Center', width: '20%' },
+                                    { key: 'status', label: 'Status', width: '15%' },
+                                ]}
+                                searchKeys={['equipmentCode', 'equipmentName', 'workCenterCode']}
+                                valueKey="equipmentId"
+                                onSelect={(eq) => setSelectedEquipmentId(eq.equipmentId)}
+                            />
                         )}
                     </div>
 
@@ -93,12 +102,13 @@ const ActivateWOModal = ({ workOrder, onClose, onActivated }) => {
                         </div>
                     )}
 
-                    {/* Operator */}
+                    {/* Activated By (auto — from logged-in user) */}
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Operator / Activated By *</label>
-                        <input type="text" value={operator} onChange={(e) => setOperator(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm" required
-                            placeholder="e.g. operator-001" />
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Activated By</label>
+                        <div className="w-full border rounded-lg px-3 py-2 text-sm bg-slate-50 text-slate-600">
+                            {currentUser}
+                            <span className="text-xs text-slate-400 ml-2">(auto — logged-in user)</span>
+                        </div>
                     </div>
 
                     {/* Notes */}
@@ -111,7 +121,7 @@ const ActivateWOModal = ({ workOrder, onClose, onActivated }) => {
                     {/* Submit */}
                     <div className="flex justify-end gap-3 pt-3 border-t">
                         <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm">Cancel</button>
-                        <button type="submit" disabled={loading || !selectedEquipmentId || !operator}
+                        <button type="submit" disabled={loading || !selectedEquipmentId}
                             className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                             {loading ? <Loader size={14} className="animate-spin" /> : <Zap size={14} />}
                             Activate

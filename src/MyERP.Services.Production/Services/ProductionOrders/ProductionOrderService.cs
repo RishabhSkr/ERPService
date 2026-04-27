@@ -10,6 +10,7 @@ using MyERP.Services.Production.Exceptions;
 using MyERP.Services.Production.Models;
 using MyERP.Services.Production.Repositories.BOM;
 using MyERP.Services.Production.Repositories.ProductionOrders;
+using MyERP.Services.Production.Repositories.WorkOrder;
 using MyERP.Shared.Events;
 
 
@@ -19,17 +20,20 @@ namespace MyERP.Services.Production.Services.ProductionOrders
     {
         private readonly IProductionOrderRepository _repository;
         private readonly IBOMRepository _bomRepository;
+        private readonly IWorkOrderRepository _woRepository;
         private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<ProductionOrderService> _logger;
 
         public ProductionOrderService(
             IProductionOrderRepository repository,
             IBOMRepository bomRepository,
+            IWorkOrderRepository woRepository,
             IEventPublisher eventPublisher,
             ILogger<ProductionOrderService> logger)
         {
             _repository = repository;
             _bomRepository = bomRepository;
+            _woRepository = woRepository;
             _eventPublisher = eventPublisher;
             _logger = logger;
         }
@@ -86,7 +90,11 @@ namespace MyERP.Services.Production.Services.ProductionOrders
                 ProductCode = dto.ProductCode,
                 ProductName = dto.ProductName,
                 BOMId = dto.BOMId,
+                WorkCenterId = dto.WorkCenterId,
+                WorkCenterName = dto.WorkCenterName,
                 QuantityPlanned = dto.QuantityPlanned,
+                BomCode = bom.BomCode,
+                BomVersion = bom.Version,
                 PlannedStartDate = dto.PlannedStartDate,
                 PlannedEndDate = dto.PlannedEndDate,
                 Status = ProductionOrderStatus.Create,
@@ -317,6 +325,38 @@ namespace MyERP.Services.Production.Services.ProductionOrders
         }
 
         /// <summary>
+        /// Force-complete PO — sums quantities from all non-cancelled WOs.
+        /// No user input needed. Used as manual fallback for partial completion.
+        /// </summary>
+        public async Task ForceCompleteAsync(Guid id)
+        {
+            var order = await _repository.GetByIdAsync(id);
+            if (order == null)
+                throw new NotFoundException("ProductionOrder", id);
+
+            if (order.Status != ProductionOrderStatus.InProgress)
+                throw new BusinessRuleException(
+                    $"Cannot complete order with status '{order.Status}'. Must be 'InProgress'.");
+
+            // Sum from WOs — no manual qty input needed
+            var allWOs = await _woRepository.GetAllByProductionOrderWithDetailsAsync(id);
+            var nonCancelled = allWOs
+                .Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
+
+            order.QuantityGood = nonCancelled.Sum(w => w.QuantityCompleted);
+            order.QuantityScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            order.Status = ProductionOrderStatus.Completed;
+            order.ActualEndDate = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            await _repository.UpdateAsync(order);
+
+            _logger.LogInformation(
+                "Force-completed PO {OrderNumber}: Good={Good}, Scrap={Scrap}, WOs={WOCount}",
+                order.OrderNumber, order.QuantityGood, order.QuantityScrap, nonCancelled.Count);
+        }
+
+        /// <summary>
         /// Cancel production order — Saga pattern for material return
         /// </summary>
         public async Task CancelAsync(Guid id, string reason)
@@ -431,6 +471,8 @@ namespace MyERP.Services.Production.Services.ProductionOrders
                 ProductCode = order.ProductCode,
                 ProductName = order.ProductName,
                 BOMId = order.BOMId,
+                WorkCenterId = order.WorkCenterId,
+                WorkCenterName = order.WorkCenterName,
                 QuantityPlanned = order.QuantityPlanned,
                 QuantityGood = order.QuantityGood,
                 QuantityScrap = order.QuantityScrap,

@@ -74,7 +74,7 @@ public class MaterialReturnRequestedConsumer : IConsumer<MaterialReturnRequested
                 MovementType  = "RELEASE",
                 ItemType      = "RawMaterial",
                 ItemId        = reservation.ItemId,
-                WarehouseId   = reservation.WarehouseId,
+                StorageLocationId   = reservation.FromLocationId ?? Guid.Empty,
                 Quantity      = reservation.Quantity,  // Release exactly what was reserved
                 ReferenceType = "ProductionOrder",
                 ReferenceId   = @event.ProductionOrderId,
@@ -107,7 +107,7 @@ public class MaterialReturnRequestedConsumer : IConsumer<MaterialReturnRequested
             // ─── Release each material ───
             foreach (var material in @event.MaterialsConsumed)
             {
-                // Find original RESERVE movement (to get WarehouseId)
+                // Find original RESERVE movement (to get StorageLocationId)
                 var reservation = await _context.StockMovements
                     .FirstOrDefaultAsync(sm => sm.ReferenceType == "ProductionOrder"
                                             && sm.ReferenceId == @event.ProductionOrderId
@@ -125,7 +125,7 @@ public class MaterialReturnRequestedConsumer : IConsumer<MaterialReturnRequested
                     MovementType  = "RELEASE",
                     ItemType      = "RawMaterial",
                     ItemId        = material.RawMaterialId,
-                    WarehouseId   = reservation.WarehouseId,
+                    StorageLocationId   = reservation.FromLocationId ?? Guid.Empty,
                     Quantity      = reservation.Quantity,  // Release exactly what was reserved
                     ReferenceType = "ProductionOrder",
                     ReferenceId   = @event.ProductionOrderId,

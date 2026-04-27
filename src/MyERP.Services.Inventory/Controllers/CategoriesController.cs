@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Inventory.DTOs;
 using MyERP.Services.Inventory.DTOs.Categories;
 using MyERP.Services.Inventory.Services.Categories;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Inventory.Controllers
 {
     [ApiController]
     [Route("api/inventory/categories")]
+    [Authorize]
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;

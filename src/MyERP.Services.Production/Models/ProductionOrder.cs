@@ -47,6 +47,12 @@ namespace MyERP.Services.Production.Models
         /// BOM used for this order
         /// </summary>
         public Guid BOMId { get; set; }
+
+        /// <summary>
+        /// Work Center where this order will be produced
+        /// </summary>
+        public Guid? WorkCenterId { get; set; }
+        public string? WorkCenterName { get; set; }
         
         // ====================================
         // QUANTITY TRACKING

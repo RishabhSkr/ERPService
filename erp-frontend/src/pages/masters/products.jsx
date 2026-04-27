@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { getProducts, createProduct, updateProduct, deleteProduct, restoreProduct, addProductStock } from '../../api/master/product';
+import { getProducts, createProduct, updateProduct, deleteProduct, restoreProduct } from '../../api/master/product';
+import { getStorageLocations } from '../../api/master/storageLocation';
 import { getCategories, getUnits } from '../../api/inventoryService';
-import { Package, Plus, Edit2, Trash2, X, Save, RotateCcw, PackagePlus } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, X, Save, RotateCcw, ArrowUpDown, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SearchSelect from '../../components/common/SearchSelect';
+import StockTransferModal from '../../components/common/StockTransferModal';
+import LocationStockModal from '../../components/common/LocationStockModal';
 
 /**
  * Product Master (Finished Goods) — Full CRUD + Add Stock + Restore
@@ -16,34 +20,36 @@ const Products = () => {
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [units, setUnits] = useState([]);
+    const [storageLocations, setStorageLocations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editItem, setEditItem] = useState(null);
     const [formData, setFormData] = useState(emptyForm());
-    // Add Stock modal
-    const [stockItem, setStockItem] = useState(null);
-    const [stockForm, setStockForm] = useState({ warehouseId: 'b1111111-1111-1111-1111-111111111111', quantity: '', batchNumber: '' });
+    // Transfer Stock modal
+    const [locationItem, setLocationItem] = useState(null);
 
     function emptyForm() {
-        return { productCode: '', productName: '', description: '', categoryId: '', unitId: '', price: '', minStockLevel: 0 };
+        return { productCode: '', productName: '', description: '', categoryId: '', unitId: '', price: '', minStockLevel: 0, defaultStorageLocationId: '' };
     }
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [pRes, catRes, unitRes] = await Promise.all([getProducts(), getCategories(), getUnits()]);
+            const [pRes, catRes, unitRes, locRes] = await Promise.all([getProducts(), getCategories(), getUnits(), getStorageLocations()]);
             // getProducts returns: { success, data: { data: [...items], pageNumber, pageSize, totalRecords } }
             const unwrapPaged = (res) => {
                 const d = res?.data || res;
                 return d?.data || (Array.isArray(d) ? d : []);
             };
             const unwrapList = (res) => {
-                const d = res.data?.data || res.data || [];
+                if (Array.isArray(res)) return res;
+                const d = res?.data?.data || res?.data || res || [];
                 return Array.isArray(d) ? d : (d?.data || []);
             };
             setProducts(unwrapPaged(pRes));
             setCategories(unwrapList(catRes));
             setUnits(unwrapList(unitRes));
+            setStorageLocations(unwrapList(locRes).filter(loc => loc.allowProducts !== false));
         } catch (error) {
             console.error("Failed to load data", error);
         } finally {
@@ -64,6 +70,7 @@ const Products = () => {
             unitId: item.unitId || '',
             price: item.price || '',
             minStockLevel: item.minStockLevel || 0,
+            defaultStorageLocationId: item.defaultStorageLocationId || '',
         });
         setShowForm(true);
     };
@@ -77,6 +84,7 @@ const Products = () => {
                     description: formData.description || null,
                     price: parseFloat(formData.price) || 0,
                     minStockLevel: parseFloat(formData.minStockLevel) || 0,
+                    defaultStorageLocationId: formData.defaultStorageLocationId || null,
                 });
                 toast.success('Product updated!');
             } else {
@@ -88,6 +96,7 @@ const Products = () => {
                     unitId: formData.unitId,
                     price: parseFloat(formData.price) || 0,
                     minStockLevel: parseFloat(formData.minStockLevel) || 0,
+                    defaultStorageLocationId: formData.defaultStorageLocationId || null,
                 });
                 toast.success('Product created!');
             }
@@ -115,20 +124,7 @@ const Products = () => {
         } catch (err) { toast.error('Failed'); }
     };
 
-    const handleAddStock = async (e) => {
-        e.preventDefault();
-        if (!stockForm.quantity || parseFloat(stockForm.quantity) <= 0) return toast.error('Enter valid quantity');
-        try {
-            await addProductStock(stockItem.id, {
-                warehouseId: stockForm.warehouseId,
-                quantity: parseFloat(stockForm.quantity),
-                batchNumber: stockForm.batchNumber || null,
-            });
-            toast.success('Stock added!');
-            setStockItem(null);
-            loadData();
-        } catch (err) { toast.error('Failed'); }
-    };
+
 
     return (
         <div className="p-6">
@@ -183,9 +179,9 @@ const Products = () => {
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                     <div className="flex items-center justify-center gap-1">
-                                        <button onClick={() => { setStockItem(p); setStockForm({ warehouseId: 'b1111111-1111-1111-1111-111111111111', quantity: '', batchNumber: '' }); }}
-                                            className="p-1.5 rounded hover:bg-green-50 text-slate-500 hover:text-green-600" title="Add Stock">
-                                            <PackagePlus size={15} />
+                                        <button onClick={() => setLocationItem(p)}
+                                            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700" title="View Locations">
+                                            <Eye size={15} />
                                         </button>
                                         <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-blue-50 text-slate-500 hover:text-blue-600" title="Edit">
                                             <Edit2 size={15} />
@@ -236,23 +232,39 @@ const Products = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
-                                    <select value={formData.categoryId} onChange={(e) => setFormData({...formData, categoryId: e.target.value})}
-                                        className="w-full px-3 py-2.5 border rounded-lg text-sm bg-white" required={!editItem}>
-                                        <option value="">Select...</option>
-                                        {categories.map(c => (
-                                            <option key={c.id} value={c.id}>{c.categoryName} ({c.categoryCode})</option>
-                                        ))}
-                                    </select>
+                                    <SearchSelect
+                                        value={formData.categoryId}
+                                        displayValue={(() => { const c = categories.find(c => c.id === formData.categoryId); return c ? `${c.categoryName} (${c.categoryCode})` : ''; })()}
+                                        placeholder="Search category..."
+                                        items={categories}
+                                        title="Select Category"
+                                        displayFields={[
+                                            { key: 'categoryCode', label: 'Code', width: '30%', bold: true },
+                                            { key: 'categoryName', label: 'Name', width: '70%' },
+                                        ]}
+                                        searchKeys={['categoryCode', 'categoryName']}
+                                        valueKey="id"
+                                        onSelect={(c) => setFormData({...formData, categoryId: c.id})}
+                                        size="sm"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Unit *</label>
-                                    <select value={formData.unitId} onChange={(e) => setFormData({...formData, unitId: e.target.value})}
-                                        className="w-full px-3 py-2.5 border rounded-lg text-sm bg-white" required={!editItem}>
-                                        <option value="">Select...</option>
-                                        {units.map(u => (
-                                            <option key={u.id} value={u.id}>{u.unitName} ({u.unitCode})</option>
-                                        ))}
-                                    </select>
+                                    <SearchSelect
+                                        value={formData.unitId}
+                                        displayValue={(() => { const u = units.find(u => u.id === formData.unitId); return u ? `${u.unitName} (${u.unitCode})` : ''; })()}
+                                        placeholder="Search unit..."
+                                        items={units}
+                                        title="Select Unit"
+                                        displayFields={[
+                                            { key: 'unitCode', label: 'Code', width: '30%', bold: true },
+                                            { key: 'unitName', label: 'Name', width: '70%' },
+                                        ]}
+                                        searchKeys={['unitCode', 'unitName']}
+                                        valueKey="id"
+                                        onSelect={(u) => setFormData({...formData, unitId: u.id})}
+                                        size="sm"
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -267,6 +279,24 @@ const Products = () => {
                                         className="w-full px-3 py-2.5 border rounded-lg text-sm" placeholder="100" />
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Default Storage Location</label>
+                                <SearchSelect
+                                    value={formData.defaultStorageLocationId}
+                                    displayValue={(() => { const l = storageLocations.find(l => l.id === formData.defaultStorageLocationId); return l ? `${l.locationCode} (${l.warehouseName})` : ''; })()}
+                                    placeholder="Search location..."
+                                    items={storageLocations}
+                                    title="Select Default Location"
+                                    displayFields={[
+                                        { key: 'locationCode', label: 'Location Code', width: '40%', bold: true },
+                                        { key: 'warehouseName', label: 'Warehouse', width: '60%' },
+                                    ]}
+                                    searchKeys={['locationCode', 'warehouseName']}
+                                    valueKey="id"
+                                    onSelect={(l) => setFormData({...formData, defaultStorageLocationId: l.id})}
+                                    size="sm"
+                                />
+                            </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm">Cancel</button>
                                 <button type="submit" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
@@ -278,42 +308,13 @@ const Products = () => {
                 </div>
             )}
 
-            {/* Add Stock Modal */}
-            {stockItem && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                        <div className="flex items-center justify-between p-5 border-b">
-                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <PackagePlus className="text-green-500" size={20} /> Add Stock
-                            </h2>
-                            <button onClick={() => setStockItem(null)} className="p-1.5 rounded-lg hover:bg-slate-100"><X size={20} /></button>
-                        </div>
-                        <form onSubmit={handleAddStock} className="p-5 space-y-4">
-                            <div className="bg-blue-50 rounded-lg p-3 text-sm">
-                                <span className="font-bold text-blue-700">{stockItem.productCode}</span>
-                                <span className="text-slate-500 ml-2">{stockItem.productName}</span>
-                                <p className="text-xs text-slate-400 mt-1">Current Stock: {stockItem.currentStock ?? 0} {stockItem.unitName}</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
-                                <input type="number" step="any" value={stockForm.quantity} onChange={(e) => setStockForm({...stockForm, quantity: e.target.value})}
-                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" required placeholder="500" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Batch Number</label>
-                                <input type="text" value={stockForm.batchNumber} onChange={(e) => setStockForm({...stockForm, batchNumber: e.target.value})}
-                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" placeholder="BATCH-2024-001" />
-                            </div>
-                            <div className="flex justify-end gap-3 pt-2">
-                                <button type="button" onClick={() => setStockItem(null)} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm">Cancel</button>
-                                <button type="submit" className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">
-                                    <PackagePlus size={16} /> Add Stock
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            {/* Location Stock Modal */}
+            <LocationStockModal
+                isOpen={!!locationItem}
+                onClose={() => setLocationItem(null)}
+                item={locationItem}
+                itemType="Product"
+            />
         </div>
     );
 };

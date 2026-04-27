@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PlayCircle, CheckCircle, XCircle, RotateCcw, Eye, Factory } from 'lucide-react';
-import CompleteOrderModal from '../../components/production/CompleteOrderModal';
 import ProductionOrderDetailModal from '../../components/production/ProductionOrderDetailModal';
 import FilterBar from '../../components/common/FilterBar';
 import useApi from '../../hooks/useApi';
@@ -9,7 +8,7 @@ import {
     releaseOrder,
     startOrder,
     cancelOrder,
-    completeOrder,
+    forceCompleteOrder,
     retryReservation
 } from '../../api/productionService';
 
@@ -17,9 +16,7 @@ const OrderManagement = () => {
     const [orders, setOrders] = useState([]);
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterId, setFilterId] = useState('');
-    const [selectedOrder, setSelectedOrder] = useState(null);
     const [detailOrder, setDetailOrder] = useState(null);
-    const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
 
     const { loading: isLoading, requestHandlerFunction } = useApi();
 
@@ -80,23 +77,15 @@ const OrderManagement = () => {
         if (response.success) fetchOrders();
     };
 
-    const handleCompleteConfirm = async (id, goodQty, scrapQty) => {
-        const payload = {
-            quantityGood: parseFloat(goodQty),
-            quantityScrap: parseFloat(scrapQty),
-        };
-        const response = await requestHandlerFunction(
-            () => completeOrder(id, payload), 'Production Completed!'
+    const handleForceComplete = async (order) => {
+        const confirmed = confirm(
+            `Force-complete "${order.orderNumber}"?\n\nQuantities will be auto-summed from all Work Orders.\nUse this if not all WOs are needed (partial completion).`
         );
-        if (response.success) {
-            setIsCompleteModalOpen(false);
-            fetchOrders();
-        }
-    };
-
-    const openCompleteModal = (order) => {
-        setSelectedOrder(order);
-        setIsCompleteModalOpen(true);
+        if (!confirmed) return;
+        const response = await requestHandlerFunction(
+            () => forceCompleteOrder(order.id), 'Production Order Completed!'
+        );
+        if (response.success) fetchOrders();
     };
 
     const getStatusColor = (status) => {
@@ -165,6 +154,7 @@ const OrderManagement = () => {
                         <tr>
                             <th className="p-3">Order</th>
                             <th className="p-3">Product</th>
+                            <th className="p-3">BOM</th>
                             <th className="p-3 text-center">Qty</th>
                             <th className="p-3">Dates</th>
                             <th className="p-3">Status</th>
@@ -188,10 +178,22 @@ const OrderManagement = () => {
                                             <div className="text-xs text-slate-400">Manual</div>
                                         )}
                                     </td>
-                                    {/* Product */}
                                     <td className="p-3">
                                         <span className="font-medium text-slate-700">{order.productName}</span>
                                         <div className="text-xs text-slate-400">{order.productCode}</div>
+                                    </td>
+                                    {/* BOM */}
+                                    <td className="p-3">
+                                        {order.bomCode ? (
+                                            <div className="inline-flex flex-col gap-0.5">
+                                                <span className="text-xs font-mono font-medium text-slate-700">{order.bomCode}</span>
+                                                <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 w-max">
+                                                    v{order.bomVersion}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-400">-</span>
+                                        )}
                                     </td>
                                     {/* Qty */}
                                     <td className="p-3 text-center">
@@ -265,11 +267,12 @@ const OrderManagement = () => {
                                                 </>
                                             )}
 
-                                            {/* InProgress → Complete */}
+                                            {/* InProgress → Force Complete (no qty popup — auto-sums from WOs) */}
                                             {order.status === 'InProgress' && (
-                                                <button onClick={() => openCompleteModal(order)} disabled={isLoading}
-                                                    className="px-2.5 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:opacity-50 flex items-center gap-1">
-                                                    <CheckCircle size={12} /> Complete
+                                                <button onClick={() => handleForceComplete(order)} disabled={isLoading}
+                                                    className="px-2.5 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:opacity-50 flex items-center gap-1"
+                                                    title="Auto-complete PO by summing WO quantities">
+                                                    <CheckCircle size={12} /> Force Complete
                                                 </button>
                                             )}
                                         </div>
@@ -280,15 +283,6 @@ const OrderManagement = () => {
                     </tbody>
                 </table>
             </div>
-
-            {/* Complete Modal */}
-            <CompleteOrderModal
-                isOpen={isCompleteModalOpen}
-                onClose={() => setIsCompleteModalOpen(false)}
-                order={selectedOrder}
-                isLoading={isLoading}
-                onConfirm={handleCompleteConfirm}
-            />
 
             {/* Detail Modal */}
             {detailOrder && (

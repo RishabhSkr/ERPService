@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Production.DTOs.Process;
 using MyERP.Services.Production.Middleware;
 using MyERP.Services.Production.Services.Process;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production/processes")]
+    [Authorize]
     public class ProcessesController : ControllerBase
     {
         private readonly IProcessService _service;

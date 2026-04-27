@@ -13,7 +13,7 @@ namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production/orders")]
-    // [Authorize] // Uncomment when JWT is set up
+    [Authorize]
     public class ProductionOrdersController : ControllerBase
     {
         private readonly IProductionOrderService _service;
@@ -108,6 +108,20 @@ namespace MyERP.Services.Production.Controllers
             {
                 Success = true,
                 Message = $"Production completed: Good={dto.QuantityGood}, Scrap={dto.QuantityScrap}"
+            });
+        }
+
+        /// <summary>
+        /// Force-complete PO — auto-sums quantities from WOs (no user input needed)
+        /// </summary>
+        [HttpPost("{id:guid}/force-complete")]
+        public async Task<ActionResult<ApiResponse<string>>> ForceComplete(Guid id)
+        {
+            await _service.ForceCompleteAsync(id);
+            return Ok(new ApiResponse
+            {
+                Success = true,
+                Message = "Production order force-completed (quantities summed from Work Orders)"
             });
         }
 

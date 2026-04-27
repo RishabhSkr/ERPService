@@ -10,9 +10,17 @@ namespace MyERP.Services.Inventory.Models
         public string ItemCode { get; set; } = string.Empty;
         public string ItemName { get; set; } = string.Empty;
         
-        // Warehouse
-        public Guid WarehouseId { get; set; }
-        public Warehouse? Warehouse { get; set; }
+        // Movement Source
+        public Guid? FromWarehouseId { get; set; }
+        public Warehouse? FromWarehouse { get; set; }
+        public Guid? FromLocationId { get; set; }
+        public StorageLocation? FromLocation { get; set; }
+
+        // Movement Destination
+        public Guid? ToWarehouseId { get; set; }
+        public Warehouse? ToWarehouse { get; set; }
+        public Guid? ToLocationId { get; set; }
+        public StorageLocation? ToLocation { get; set; }
         
         // Movement details
         public string MovementType { get; set; } = string.Empty; // IN, OUT, RESERVE, RELEASE, ADJUST, SCRAP

@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Inventory.DTOs;
 using MyERP.Services.Inventory.DTOs.StockMovements;
 using MyERP.Services.Inventory.Services.StockMovements;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Inventory.Controllers
 {
     [ApiController]
     [Route("api/inventory/stock-movements")]
+    [Authorize]
     public class StockMovementsController : ControllerBase
     {
         private readonly IStockMovementService _stockMovementService;
@@ -26,6 +28,16 @@ namespace MyERP.Services.Inventory.Controllers
             var result = await _stockMovementService.RecordMovementAsync(dto, null);
             return CreatedAtAction(nameof(GetById), new { id = result.Id },
                 ApiResponse<StockMovementResponseDto>.Ok(result, "Stock movement recorded successfully"));
+        }
+
+        /// <summary>
+        /// Transfer stock between storage locations
+        /// </summary>
+        [HttpPost("transfer")]
+        public async Task<IActionResult> TransferStock([FromBody] TransferStockDto dto)
+        {
+            var result = await _stockMovementService.TransferStockAsync(dto, null);
+            return Ok(ApiResponse<StockMovementResponseDto>.Ok(result, "Stock transferred successfully"));
         }
 
         /// <summary>

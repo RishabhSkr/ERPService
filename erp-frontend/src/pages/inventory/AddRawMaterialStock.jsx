@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Search, RefreshCw, AlertCircle, PackagePlus, X, ArrowUpDown } from 'lucide-react';
+import { Package, Search, RefreshCw, AlertCircle, PackagePlus, X, ArrowUpDown, Eye, ArrowDownUp } from 'lucide-react';
 import useApi from '../../hooks/useApi';
 import { getRawMaterials } from '../../api/master/rawMaterial';
+import { getStorageLocations } from '../../api/master/storageLocation';
 import { recordStockMovement } from '../../api/inventoryService';
 import toast from 'react-hot-toast';
+import SearchSelect from '../../components/common/SearchSelect';
+import StockTransferModal from '../../components/common/StockTransferModal';
+import LocationStockModal from '../../components/common/LocationStockModal';
 
 /**
  * Raw Material Inventory — Stock overview + Add Stock per item
  * 
- * RawMaterialListDto: { id, materialCode, materialName, categoryName, cost, currentStock, reservedStock, availableStock, unitName, supplier, isActive }
+ * RawMaterialListDto: { id, materialCode, materialNaFme, categoryName, cost, currentStock, reservedStock, availableStock, unitName, supplier, isActive }
  * AddStock: POST /raw-materials/{id}/add-stock { warehouseId, quantity, batchNumber }
  */
 const RawMaterialInventory = () => {
@@ -16,18 +20,39 @@ const RawMaterialInventory = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const { loading, requestHandlerFunction } = useApi();
     const [stockItem, setStockItem] = useState(null);
-    const [stockForm, setStockForm] = useState({ warehouseId: 'b1111111-1111-1111-1111-111111111111', quantity: '', batchNumber: '' });
+    const [storageLocations, setStorageLocations] = useState([]);
+    const [stockForm, setStockForm] = useState({ storageLocationId: '', quantity: '', batchNumber: '', adjustmentType: 'IN' });
+    const [transferItem, setTransferItem] = useState(null);
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    const [locationItem, setLocationItem] = useState(null);
 
     const fetchStock = useCallback(async () => {
-        const response = await requestHandlerFunction(() => getRawMaterials());
+        const [response, locResponse] = await Promise.all([
+            requestHandlerFunction(() => getRawMaterials()),
+            getStorageLocations()
+        ]);
         if (response.success) {
             const pagedData = response.data?.data || response.data || {};
             const items = pagedData?.data || (Array.isArray(pagedData) ? pagedData : []);
             setStockData(Array.isArray(items) ? items : []);
         }
+        if (locResponse) {
+            const unwrap = (res) => {
+                if (Array.isArray(res)) return res;
+                const d = res?.data?.data || res?.data || res || [];
+                return Array.isArray(d) ? d : (d?.data || []);
+            };
+            setStorageLocations(unwrap(locResponse));
+        }
     }, [requestHandlerFunction]);
 
-    useEffect(() => { fetchStock(); }, [fetchStock]);
+     useEffect(() => { 
+        const initLoad = async () => {
+                await fetchStock();
+            };
+            initLoad(); 
+        }, [fetchStock]);
+    
 
     const filteredStock = stockData.filter(item =>
         (item.materialName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -35,25 +60,55 @@ const RawMaterialInventory = () => {
         (item.supplier || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleAddStock = async (e) => {
+     const handleAdjustStock = async (e) => {
         e.preventDefault();
-        if (!stockForm.quantity || parseFloat(stockForm.quantity) <= 0) return toast.error('Enter valid quantity');
+        
+        const qty = parseFloat(stockForm.quantity);
+        // Note: Set exact quantity me 0 bhi valid ho sakta hai agar stock khali karna ho
+        if (isNaN(qty) || qty < 0) return toast.error('Enter a valid non-negative quantity');
+        if (!stockForm.storageLocationId) return toast.error('Select a storage location');
+
         try {
+            let movementTypeStr = '';
+            let actionNote = '';
+
+            // Map UI selection to Backend MovementType
+            if (stockForm.adjustmentType === 'IN') {
+                movementTypeStr = 'IN';
+                actionNote = 'Manual stock addition';
+            } else if (stockForm.adjustmentType === 'OUT') {
+                movementTypeStr = 'ADJUST_OUT';
+                actionNote = 'Manual stock reduction';
+            } else if (stockForm.adjustmentType === 'ADJUST') {
+                movementTypeStr = 'ADJUST';
+                actionNote = 'Exact stock adjustment (Overwrite)';
+            }
+
             await recordStockMovement({
-                movementType: 'IN',
+                movementType: movementTypeStr,
                 itemType: 'RawMaterial',
                 itemId: stockItem.id,
-                warehouseId: stockForm.warehouseId,
-                quantity: parseFloat(stockForm.quantity),
-                notes: stockForm.batchNumber ? `Batch: ${stockForm.batchNumber}` : 'Manual stock addition',
+                storageLocationId: stockForm.storageLocationId,
+                quantity: qty,
+                notes: stockForm.batchNumber
+                    ? `${actionNote} — Batch: ${stockForm.batchNumber}`
+                    : actionNote,
             });
-            toast.success('Stock added!');
+
+            // Dynamic success message
+            const successMsg = 
+                stockForm.adjustmentType === 'IN' ? 'Stock added!' : 
+                stockForm.adjustmentType === 'OUT' ? 'Stock reduced!' : 
+                'Stock exactly updated!';
+                
+            toast.success(successMsg);
             setStockItem(null);
             fetchStock();
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to add stock');
+            toast.error(err.response?.data?.message || 'Failed to adjust stock');
         }
     };
+
 
     const getStockStatusColor = (qty, min) => {
         if (qty === 0) return 'bg-red-100 text-red-700 border-red-200';
@@ -154,10 +209,21 @@ const RawMaterialInventory = () => {
                                 </td>
                                 <td className="px-4 py-3 text-slate-500">{item.supplier || '-'}</td>
                                 <td className="px-4 py-3 text-center">
-                                    <button onClick={() => { setStockItem(item); setStockForm({ warehouseId: 'b1111111-1111-1111-1111-111111111111', quantity: '', batchNumber: '' }); }}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-lg transition-colors">
-                                        <PackagePlus size={14} /> Add Stock
-                                    </button>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <button onClick={() => setLocationItem(item)}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-medium rounded-lg transition-colors"
+                                            title="View stock by location">
+                                            <Eye size={14} /> Locations
+                                        </button>
+                                        <button onClick={() => { setStockItem(item); setStockForm({ storageLocationId: item.defaultStorageLocationId || '', quantity: '', batchNumber: '', adjustmentType: 'IN' }); }}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-lg transition-colors">
+                                            <ArrowDownUp size={14} /> Adjust Stock
+                                        </button>
+                                        <button onClick={() => { setTransferItem(item); setShowTransferModal(true); }}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-medium rounded-lg transition-colors">
+                                            <ArrowUpDown size={14} /> Transfer
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -169,42 +235,114 @@ const RawMaterialInventory = () => {
                 </div>
             </div>
 
-            {/* Add Stock Modal */}
+            {/* Stock Adjustment Modal */}
             {stockItem && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
                         <div className="flex items-center justify-between p-5 border-b">
                             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <PackagePlus className="text-green-500" size={20} /> Add Stock
+                                <ArrowDownUp className="text-blue-500" size={20} /> Adjust Stock
                             </h2>
                             <button onClick={() => setStockItem(null)} className="p-1.5 rounded-lg hover:bg-slate-100"><X size={20} /></button>
                         </div>
-                        <form onSubmit={handleAddStock} className="p-5 space-y-4">
+                        <form onSubmit={handleAdjustStock} className="p-5 space-y-4">
                             <div className="bg-orange-50 rounded-lg p-3 text-sm">
                                 <span className="font-bold text-orange-700">{stockItem.materialCode}</span>
                                 <span className="text-slate-500 ml-2">{stockItem.materialName}</span>
                                 <p className="text-xs text-slate-400 mt-1">Current: {stockItem.currentStock ?? 0} | Available: {stockItem.availableStock ?? 0} {stockItem.unitName}</p>
                             </div>
+                                                       {/* IN/OUT/ADJUST Toggle */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
-                                <input type="number" step="any" min="0.01" value={stockForm.quantity} onChange={(e) => setStockForm({...stockForm, quantity: e.target.value})}
-                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" required placeholder="e.g. 1000" autoFocus />
+                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Adjustment Type *</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button type="button" onClick={() => setStockForm({...stockForm, adjustmentType: 'IN'})}
+                                        className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
+                                            stockForm.adjustmentType === 'IN'
+                                                ? 'bg-green-50 border-green-500 text-green-700'
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                        }`}>
+                                        ↗ Add (+)
+                                    </button>
+                                    <button type="button" onClick={() => setStockForm({...stockForm, adjustmentType: 'OUT'})}
+                                        className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
+                                            stockForm.adjustmentType === 'OUT'
+                                                ? 'bg-red-50 border-red-500 text-red-700'
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                        }`}>
+                                        ↙ Deduct (−)
+                                    </button>
+                                    <button type="button" onClick={() => setStockForm({...stockForm, adjustmentType: 'ADJUST'})}
+                                        className={`py-2.5 rounded-lg text-sm font-semibold border-2 transition-all ${
+                                            stockForm.adjustmentType === 'ADJUST'
+                                                ? 'bg-blue-50 border-blue-500 text-blue-700'
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                        }`}>
+                                        = Set Exact
+                                    </button>
+                                </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Batch Number</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
+                                <input type="number" step="any" min="0" value={stockForm.quantity} onChange={(e) => setStockForm({...stockForm, quantity: e.target.value})}
+                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" required placeholder="e.g. 500" autoFocus />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Storage Location *</label>
+                                <SearchSelect
+                                    value={stockForm.storageLocationId}
+                                    displayValue={(() => { const l = storageLocations.find(l => l.id === stockForm.storageLocationId); return l ? `${l.locationCode} (${l.warehouseName})` : ''; })()}
+                                    placeholder="Select storage location..."
+                                    items={storageLocations}
+                                    title="Select Location"
+                                    displayFields={[
+                                        { key: 'locationCode', label: 'Location', width: '40%', bold: true },
+                                        { key: 'warehouseName', label: 'Warehouse', width: '60%' },
+                                    ]}
+                                    searchKeys={['locationCode', 'warehouseName']}
+                                    valueKey="id"
+                                    onSelect={(l) => setStockForm({...stockForm, storageLocationId: l.id})}
+                                    size="sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Notes / Batch Number</label>
                                 <input type="text" value={stockForm.batchNumber} onChange={(e) => setStockForm({...stockForm, batchNumber: e.target.value})}
-                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" placeholder="RM-BATCH-001" />
+                                    className="w-full px-3 py-2.5 border rounded-lg text-sm" placeholder="Reason or batch number" />
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setStockItem(null)} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm">Cancel</button>
-                                <button type="submit" className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">
-                                    <PackagePlus size={16} /> Add Stock
+                                <button type="submit" className={`flex items-center gap-2 px-5 py-2.5 text-white rounded-lg text-sm font-medium ${
+                                    stockForm.adjustmentType === 'IN' ? 'bg-green-600 hover:bg-green-700' : 
+                                    stockForm.adjustmentType === 'OUT' ? 'bg-red-600 hover:bg-red-700' : 
+                                    'bg-blue-600 hover:bg-blue-700'
+                                }`}>
+                                    {stockForm.adjustmentType === 'IN' ? '↗ Add Stock' : 
+                                     stockForm.adjustmentType === 'OUT' ? '↙ Remove Stock' : 
+                                     '= Set Exact Stock'}
                                 </button>
                             </div>
+                            
                         </form>
                     </div>
                 </div>
             )}
+
+            {/* Stock Transfer Modal */}
+            <StockTransferModal 
+                isOpen={showTransferModal}
+                onClose={() => { setShowTransferModal(false); setTransferItem(null); }}
+                item={transferItem}
+                itemType="RawMaterial"
+                onSuccess={() => { fetchStock(); }}
+            />
+
+            {/* Location Stock Modal */}
+            <LocationStockModal
+                isOpen={!!locationItem}
+                onClose={() => setLocationItem(null)}
+                item={locationItem}
+                itemType="RawMaterial"
+            />
         </div>
     );
 };

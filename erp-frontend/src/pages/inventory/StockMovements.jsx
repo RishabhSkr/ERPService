@@ -68,7 +68,15 @@ const StockMovements = () => {
 
     useEffect(() => { fetchData(); }, [filter]);
 
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+    const formatDate = (d) => {
+        if (!d) return '-';
+        // Ensure it is parsed as UTC if backend string is missing 'Z'
+        const dateString = d.endsWith('Z') || d.includes('+') ? d : `${d}Z`;
+        return new Date(dateString).toLocaleString('en-IN', { 
+            day: '2-digit', month: 'short', year: 'numeric', 
+            hour: '2-digit', minute: '2-digit', hour12: true 
+        });
+    };
 
     return (
         <div className="p-6">
@@ -128,16 +136,35 @@ const StockMovements = () => {
                             <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Qty</th>
                             <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Before</th>
                             <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">After</th>
-                            <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Reference</th>
+                            <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Location</th>
                             <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Notes</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {loading ? (
-                            <tr><td colSpan={9} className="text-center py-10 text-slate-400">Loading...</td></tr>
+                            <tr><td colSpan={8} className="text-center py-10 text-slate-400">Loading...</td></tr>
                         ) : movements.length === 0 ? (
-                            <tr><td colSpan={9} className="text-center py-10 text-slate-400">No movements found</td></tr>
-                        ) : movements.map((m, i) => (
+                            <tr><td colSpan={8} className="text-center py-10 text-slate-400">No movements found</td></tr>
+                        ) : movements.map((m, i) => {
+                            // Extract PO and WO numbers to style them nicely in notes
+                            let formattedNotes = m.notes || '-';
+                            if (m.notes) {
+                                // Simple string replacement to wrap PO-xxxx, WO-xxxx, and BOM-xxxx in styled spans
+                                formattedNotes = m.notes.split(/(PO-\d{4}-\d{4}|WO-\d{4}-\d{4}|BOM-\d{4}-\d{4} v\d+)/).map((part, index) => {
+                                    if (part.startsWith('PO-')) {
+                                        return <span key={index} className="font-bold text-blue-600 bg-blue-50 px-1 py-0.5 rounded mx-0.5">{part}</span>;
+                                    }
+                                    if (part.startsWith('WO-')) {
+                                        return <span key={index} className="font-bold text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded mx-0.5">{part}</span>;
+                                    }
+                                    if (part.startsWith('BOM-')) {
+                                        return <span key={index} className="font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded mx-0.5">{part}</span>;
+                                    }
+                                    return part;
+                                });
+                            }
+
+                            return (
                             <tr key={m.id || i} className="hover:bg-slate-50">
                                 <td className="px-4 py-3 text-xs text-slate-500">{formatDate(m.createdAt)}</td>
                                 <td className="px-4 py-3">
@@ -161,13 +188,23 @@ const StockMovements = () => {
                                 </td>
                                 <td className="px-4 py-3 text-sm text-right text-slate-500">{m.stockBefore}</td>
                                 <td className="px-4 py-3 text-sm text-right font-medium text-slate-700">{m.stockAfter}</td>
-                                <td className="px-4 py-3 text-xs text-slate-500">
-                                    {m.referenceType && <span className="font-medium">{m.referenceType}</span>}
-                                    {m.referenceId && <p className="text-slate-400 font-mono">{String(m.referenceId).slice(0,8)}...</p>}
+                                <td className="px-4 py-3 text-xs">
+                                    <div className="flex flex-col gap-1">
+                                        {m.fromLocationCode && (
+                                            <span className="text-slate-500"><span className="text-[10px] uppercase font-bold text-slate-400">From:</span> {m.fromLocationCode}</span>
+                                        )}
+                                        {m.toLocationCode && (
+                                            <span className="text-slate-500"><span className="text-[10px] uppercase font-bold text-slate-400">To:</span> {m.toLocationCode}</span>
+                                        )}
+                                        {!m.fromLocationCode && !m.toLocationCode && <span className="text-slate-400">-</span>}
+                                    </div>
                                 </td>
-                                <td className="px-4 py-3 text-xs text-slate-400 max-w-[150px] truncate">{m.notes || '-'}</td>
+                                <td className="px-4 py-3 text-xs text-slate-500 max-w-xs break-words leading-relaxed">
+                                    {formattedNotes}
+                                </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

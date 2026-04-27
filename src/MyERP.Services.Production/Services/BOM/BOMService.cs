@@ -73,7 +73,10 @@ namespace MyERP.Services.Production.Services.BOM
                     MaterialName = line.MaterialName,
                     Quantity = line.Quantity,
                     Unit = line.Unit,
-                    ScrapPercentage = line.ScrapPercentage
+                    ScrapPercentage = line.ScrapPercentage,
+                    ProcessId = line.ProcessId,
+                    ProcessCode = line.ProcessCode,
+                    ProcessName = line.ProcessName
                 }).ToList()
             };
 
@@ -109,7 +112,10 @@ namespace MyERP.Services.Production.Services.BOM
                         MaterialName = line.MaterialName,
                         Quantity = line.Quantity,
                         Unit = line.Unit,
-                        ScrapPercentage = line.ScrapPercentage
+                        ScrapPercentage = line.ScrapPercentage,
+                        ProcessId = line.ProcessId,
+                        ProcessCode = line.ProcessCode,
+                        ProcessName = line.ProcessName
                     });
                 }
             }
@@ -158,7 +164,10 @@ namespace MyERP.Services.Production.Services.BOM
                     MaterialName = l.MaterialName,
                     Quantity = l.Quantity,
                     Unit = l.Unit,
-                    ScrapPercentage = l.ScrapPercentage
+                    ScrapPercentage = l.ScrapPercentage,
+                    ProcessId = l.ProcessId,
+                    ProcessCode = l.ProcessCode,
+                    ProcessName = l.ProcessName
                 }).ToList()
             };
         }

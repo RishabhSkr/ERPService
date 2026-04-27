@@ -13,8 +13,8 @@ namespace MyERP.Services.Inventory.Repositories.Products
         Task<bool> CodeExistsAsync(string code);
         Task<Product> AddAsync(Product product);
         Task UpdateAsync(Product product);
-        Task<ProductInventory?> GetInventoryAsync(Guid productId, Guid warehouseId, string? batchNumber = null);
-        Task<ProductInventory> AddInventoryAsync(ProductInventory inventory);
+        Task<ProductInventory?> GetInventoryAsync(Guid productId, Guid storageLocationId, string? batchNumber = null);
+        Task AddProductInventoryAsync(ProductInventory inventory);
         Task UpdateInventoryAsync(ProductInventory inventory);
     }
 }

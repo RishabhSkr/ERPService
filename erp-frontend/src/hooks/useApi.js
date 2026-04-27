@@ -17,7 +17,7 @@ const useApi = () => {
             
         } catch (error) {
             console.log("API Error:", error);
-            const errMsg = error.response?.data?.error || "Something went wrong";
+            const errMsg = error.response?.data?.message || error.response?.data?.title || "Something went wrong";
             toast.error(errMsg);
             return { success: false, error: errMsg };
         }

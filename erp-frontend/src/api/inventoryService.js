@@ -25,3 +25,11 @@ export const getStockMovements = (params = {}) => inventoryApi.get('/inventory/s
 export const getStockMovementById = (id) => inventoryApi.get(`/inventory/stock-movements/${id}`);
 export const getMovementsByItem = (itemType, itemId) => inventoryApi.get(`/inventory/stock-movements/item/${itemType}/${itemId}`);
 export const recordStockMovement = (data) => inventoryApi.post('/inventory/stock-movements/record', data);
+export const transferStock = (data) => inventoryApi.post('/inventory/stock-movements/transfer', data);
+
+// --- Storage Location Types ---
+export const getStorageLocationTypes = () => inventoryApi.get('/inventory/storagelocationtypes');
+export const getStorageLocationTypeById = (id) => inventoryApi.get(`/inventory/storagelocationtypes/${id}`);
+export const createStorageLocationType = (data) => inventoryApi.post('/inventory/storagelocationtypes', data);
+export const updateStorageLocationType = (id, data) => inventoryApi.put(`/inventory/storagelocationtypes/${id}`, data);
+export const deleteStorageLocationType = (id) => inventoryApi.delete(`/inventory/storagelocationtypes/${id}`);

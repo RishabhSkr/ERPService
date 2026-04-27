@@ -56,10 +56,10 @@ const Dashboard = () => {
     };
 
     // Approve Pending Request → auto-creates POs for all items
-    const handleCreateBatch = async (quantity, startDate, endDate) => {
+    const handleCreateBatch = async (startDate, endDate, priority) => {
         const payload = {
             plannedStartDate: new Date(startDate).toISOString(),
-            priority: 2,
+            priority: priority || 3,
             notes: `Approved from dashboard. Planned start: ${startDate}`,
         };
 
@@ -179,7 +179,7 @@ const Dashboard = () => {
                                     <td className="p-4 text-right">
                                         <button
                                             className="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-md text-sm flex items-center gap-2 ml-auto transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={order.status === 'Cancelled' || isLoading}
+                                            disabled={order.status !== 'Pending' || isLoading}
                                             onClick={() => handlePlanClick(order.id)}
                                         >
                                             <Play size={16} /> Plan PO

@@ -44,6 +44,9 @@ namespace MyERP.Services.Inventory.Repositories.Inventory
             var totalCount = await query.CountAsync();
 
             var movements = await query
+                .Include(m => m.FromLocation)
+                .Include(m => m.ToLocation)
+                .AsSplitQuery()
                 .OrderByDescending(m => m.CreatedAt)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
@@ -54,12 +57,19 @@ namespace MyERP.Services.Inventory.Repositories.Inventory
 
         public async Task<StockMovement?> GetByIdAsync(Guid id)
         {
-            return await _context.StockMovements.FindAsync(id);
+            return await _context.StockMovements
+                .Include(m => m.FromLocation)
+                .Include(m => m.ToLocation)
+                .AsSplitQuery()
+                .FirstOrDefaultAsync(m => m.Id == id);
         }
 
         public async Task<List<StockMovement>> GetByItemAsync(string itemType, Guid itemId, int limit = 50)
         {
             return await _context.StockMovements
+                .Include(m => m.FromLocation)
+                .Include(m => m.ToLocation)
+                .AsSplitQuery()
                 .Where(m => m.ItemType.ToLower() == itemType.ToLower() && m.ItemId == itemId)
                 .OrderByDescending(m => m.CreatedAt)
                 .Take(limit)

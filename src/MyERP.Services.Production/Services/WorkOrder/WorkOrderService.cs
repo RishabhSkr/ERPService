@@ -174,8 +174,8 @@ namespace MyERP.Services.Production.Services.WorkOrder
             if (wo.Status != WorkOrderStatus.Released)
                 throw new AppException($"Can only retry for Released WOs. Current: '{wo.Status}'");
 
-            if (wo.ReservationStatus != ReservationStatus.Failed)
-                throw new AppException($"Can only retry Failed reservations. Current: '{wo.ReservationStatus}'");
+            if (wo.ReservationStatus != ReservationStatus.Failed && wo.ReservationStatus != ReservationStatus.Pending)
+                throw new AppException($"Can only retry Failed or Pending reservations. Current: '{wo.ReservationStatus}'");
 
             wo.ReservationStatus = ReservationStatus.Pending;
             wo.ReservationFailReason = null;
@@ -580,6 +580,9 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
                     // Notify Inventory: consume materials + add finished goods + handle scrap
                     await PublishWoCompletionEvent(wo);
+
+                    // ═══ AUTO-COMPLETE PO: Check if ALL WOs for this PO are done ═══
+                    await TryAutoCompletePO(wo.ProductionOrderId);
                 }
                 await _repository.UpdateAsync(wo);
             }
@@ -784,6 +787,46 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 "Published WO completion for {WONumber}: Good={Good}, Scrap={Scrap}, Materials={Count}",
                 wo.WorkOrderNumber, wo.QuantityCompleted, wo.QuantityScrap,
                 completionEvent.MaterialsConsumed.Count);
+        }
+
+        // ====================================================================
+        // AUTO-COMPLETE PO: When ALL non-cancelled WOs are Completed
+        // ====================================================================
+        /// <summary>
+        /// Checks if all non-cancelled WOs for a PO are completed.
+        /// If yes, auto-completes the PO by summing WO quantities.
+        /// User can still manually complete PO as fallback (partial completion).
+        /// </summary>
+        private async Task TryAutoCompletePO(Guid productionOrderId)
+        {
+            var allWOs = await _repository.GetAllByProductionOrderWithDetailsAsync(productionOrderId);
+            var woList = allWOs.ToList();
+
+            // Only consider non-cancelled WOs
+            var nonCancelled = woList.Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
+
+            // If no non-cancelled WOs exist, nothing to do
+            if (nonCancelled.Count == 0) return;
+
+            // Check if ALL non-cancelled WOs are Completed
+            var allCompleted = nonCancelled.All(w => w.Status == WorkOrderStatus.Completed);
+            if (!allCompleted) return;
+
+            // All WOs done → auto-complete PO
+            var po = await _poRepository.GetByIdAsync(productionOrderId);
+            if (po == null || po.Status == ProductionOrderStatus.Completed) return;
+
+            po.Status = ProductionOrderStatus.Completed;
+            po.QuantityGood = nonCancelled.Sum(w => w.QuantityCompleted);
+            po.QuantityScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            po.ActualEndDate = DateTime.UtcNow;
+            po.UpdatedAt = DateTime.UtcNow;
+
+            await _poRepository.UpdateAsync(po);
+
+            _logger.LogInformation(
+                "PO {PONumber} auto-completed: All {WOCount} WOs finished. Good={Good}, Scrap={Scrap}",
+                po.OrderNumber, nonCancelled.Count, po.QuantityGood, po.QuantityScrap);
         }
     }
 }

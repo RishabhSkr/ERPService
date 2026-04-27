@@ -3,11 +3,13 @@ using MyERP.Services.Production.DTOs.Equipment;
 using MyERP.Services.Production.DTOs.Process;
 using MyERP.Services.Production.Middleware;
 using MyERP.Services.Production.Services.Equipment;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production/equipment")]
+    [Authorize]
     public class EquipmentController : ControllerBase
     {
         private readonly IEquipmentService _service;

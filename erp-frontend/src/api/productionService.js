@@ -25,6 +25,7 @@ export const getOrderById = (id) => productionApi.get(`/production/orders/${id}`
 export const createOrder = (data) => productionApi.post('/production/orders', data);
 export const startOrder = (id) => productionApi.patch(`/production/orders/${id}/start`);
 export const completeOrder = (id, data) => productionApi.post(`/production/orders/${id}/complete`, data);
+export const forceCompleteOrder = (id) => productionApi.post(`/production/orders/${id}/force-complete`);
 export const cancelOrder = (id, reason) => productionApi.delete(`/production/orders/${id}`, { params: { reason } });
 export const releaseOrder = (id) => productionApi.patch(`/production/orders/${id}/release`);
 export const retryReservation = (id) => productionApi.post(`/production/orders/${id}/retry-reservation`);

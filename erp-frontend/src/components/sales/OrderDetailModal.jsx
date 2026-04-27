@@ -22,7 +22,7 @@ const STATUS_COLORS = {
  */
 const OrderDetailModal = ({ orderId, onClose, onRefresh }) => {
     //  Hook always called at top — before any returns
-    const { orderDetail, loading, fetchOrderById, confirmOrder, handleDeliver } = useSales();
+    const { orderDetail, loading, fetchOrderById, confirmOrder, handleDeliver,forceComplete } = useSales();
 
     // Fetch full order detail when orderId changes
     useEffect(() => {
@@ -176,6 +176,23 @@ const OrderDetailModal = ({ orderId, onClose, onRefresh }) => {
                             <PackageCheck size={16} /> Confirm Order
                         </button>
                     )}
+
+                    {/* FORCE COMPLETE BUTTON - Only for Confirmed orders */}
+                    {order.orderStatus === 'InProduction' && (
+                        <button
+                            onClick={async () => {
+                                if(window.confirm('Are you sure you want to force complete this order?')) {
+                                    const success = await forceComplete(order.id);
+                                    if(success) { onRefresh?.(); onClose(); }
+                                }
+                            }}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                        >
+                            <PackageCheck size={16} /> Force Complete
+                        </button>
+                    )}
+
                     {order.orderStatus === 'Shipped' && (
                         <button
                             onClick={handleDelivered}

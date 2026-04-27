@@ -57,8 +57,26 @@ namespace MyERP.Services.Production.Models
         /// Example: 5% scrap means order 5% extra
         /// </summary>
         public decimal ScrapPercentage { get; set; } = 0;
-        
+
+        /// <summary>
+        /// Which process consumes this material (FK → Process table)
+        /// 📝 Industry: BOM defines material-to-process mapping, not ProcessRoute
+        /// Example: "Steel Rod" consumed in "1010 - Cutting" process
+        /// </summary>
+        public Guid? ProcessId { get; set; }
+
+        /// <summary>
+        /// Denormalized process code for display: "1010"
+        /// </summary>
+        public string? ProcessCode { get; set; }
+
+        /// <summary>
+        /// Denormalized process name for display: "Cutting"
+        /// </summary>
+        public string? ProcessName { get; set; }
+
         // Navigation
         public virtual BOM? BOM { get; set; }
+        public virtual Process? Process { get; set; }
     }
 }

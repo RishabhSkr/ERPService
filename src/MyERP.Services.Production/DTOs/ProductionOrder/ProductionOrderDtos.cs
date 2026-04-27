@@ -17,6 +17,8 @@ namespace MyERP.Services.Production.DTOs.ProductionOrder
         public string ProductCode { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
         public Guid BOMId { get; set; }
+        public Guid? WorkCenterId { get; set; }
+        public string? WorkCenterName { get; set; }
         public decimal QuantityPlanned { get; set; }
         public decimal QuantityGood { get; set; }
         public decimal QuantityScrap { get; set; }
@@ -75,6 +77,8 @@ namespace MyERP.Services.Production.DTOs.ProductionOrder
         public DateTime PlannedEndDate { get; set; }
         public int Priority { get; set; } = 3;
         public string? Notes { get; set; }
+        public Guid? WorkCenterId { get; set; }
+        public string? WorkCenterName { get; set; }
     }
 
     /// <summary>

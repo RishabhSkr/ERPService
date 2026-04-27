@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Route as RouteIcon, Plus, Edit2, Trash2, X, RefreshCw, Save, ChevronDown, ChevronRight, Eye, Loader } from 'lucide-react';
+import { Route as RouteIcon, Plus, Edit2, Trash2, X, RefreshCw, Save, ChevronDown, ChevronRight, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
     getProcessRoutes, createProcessRoute, updateProcessRoute,
     getProcesses, getWorkCenters, getEquipment
 } from '../../api/productionService';
 import { getProducts } from '../../api/master/product';
-import { getRawMaterials } from '../../api/master/rawMaterial';
+import SearchSelect from '../../components/common/SearchSelect';
 
 /**
- * Process Routes — Route → Steps (ordered) → Materials per step
+ * Process Routes — Route → Steps (ordered)
+ * Materials removed from steps — now defined in BOM Line (industry standard)
  * 
  * CreateProcessRouteDto: { routeCode, productId, workCenterId, description, steps[] }
- * CreateProcessRouteStepDto: { stepNumber, processId, equipmentId?, setupTimeMinutes, runTimePerUnitMinutes, notes, materials[] }
- * CreateStepMaterialDto: { bomLineId?, rawMaterialId, materialCode, materialName, quantity, unit }
+ * CreateProcessRouteStepDto: { stepNumber, processId, equipmentId?, setupTimeMinutes, runTimePerUnitMinutes, notes }
  */
 const ProcessRoutesPage = () => {
     const [routes, setRoutes] = useState([]);
@@ -21,7 +21,6 @@ const ProcessRoutesPage = () => {
     const [workCenters, setWorkCenters] = useState([]);
     const [equipmentList, setEquipmentList] = useState([]);
     const [products, setProducts] = useState([]);
-    const [rawMaterials, setRawMaterials] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Form state
@@ -45,16 +44,16 @@ const ProcessRoutesPage = () => {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const [routeRes, procRes, wcRes, eqRes, prodRes, rmRes] = await Promise.all([
+            const [routeRes, procRes, wcRes, eqRes, prodRes] = await Promise.all([
                 getProcessRoutes(), getProcesses(), getWorkCenters(), getEquipment(),
-                getProducts(), getRawMaterials()
+                getProducts()
             ]);
+            console.log('Route Res', routeRes);
             setRoutes(extractData(routeRes));
             setProcesses(extractData(procRes));
             setWorkCenters(extractData(wcRes));
             setEquipmentList(extractData(eqRes));
             setProducts(extractProducts(prodRes));
-            setRawMaterials(extractProducts(rmRes));
         } catch (err) {
             toast.error('Failed to load data');
         } finally {
@@ -75,12 +74,7 @@ const ProcessRoutesPage = () => {
         return {
             stepNumber: num, processId: '', equipmentId: '',
             setupTimeMinutes: '', runTimePerUnitMinutes: '', notes: '',
-            materials: [],
         };
-    }
-
-    function emptyMaterial() {
-        return { rawMaterialId: '', materialCode: '', materialName: '', quantity: '', unit: '' };
     }
 
     const openCreate = () => { setEditRoute(null); setFormData(emptyForm()); setShowForm(true); };
@@ -93,18 +87,11 @@ const ProcessRoutesPage = () => {
             description: route.description || '',
             steps: (route.steps || []).map(s => ({
                 stepNumber: s.stepNumber,
-                processId: processes.find(p => p.processCode === s.processCode)?.processId || '',
-                equipmentId: '',
+                processId: s.processId || '',
+                equipmentId: s.equipmentId || '',
                 setupTimeMinutes: s.setupTimeMinutes,
                 runTimePerUnitMinutes: s.runTimePerUnitMinutes,
                 notes: s.notes || '',
-                materials: (s.materials || []).map(m => ({
-                    rawMaterialId: m.rawMaterialId,
-                    materialCode: m.materialCode,
-                    materialName: m.materialName,
-                    quantity: m.quantity,
-                    unit: m.unit,
-                })),
             })),
         });
         setShowForm(true);
@@ -129,35 +116,6 @@ const ProcessRoutesPage = () => {
         setFormData({ ...formData, steps: newSteps });
     };
 
-    // Material management within step
-    const addMaterial = (stepIdx) => {
-        const newSteps = [...formData.steps];
-        newSteps[stepIdx].materials = [...newSteps[stepIdx].materials, emptyMaterial()];
-        setFormData({ ...formData, steps: newSteps });
-    };
-
-    const removeMaterial = (stepIdx, matIdx) => {
-        const newSteps = [...formData.steps];
-        newSteps[stepIdx].materials = newSteps[stepIdx].materials.filter((_, i) => i !== matIdx);
-        setFormData({ ...formData, steps: newSteps });
-    };
-
-    const updateMaterial = (stepIdx, matIdx, field, value) => {
-        const newSteps = [...formData.steps];
-        const mat = { ...newSteps[stepIdx].materials[matIdx], [field]: value };
-        // Auto-fill code/name when rawMaterialId changes
-        if (field === 'rawMaterialId') {
-            const rm = rawMaterials.find(r => (r.id || r.rawMaterialId) === value);
-            if (rm) {
-                mat.materialCode = rm.materialCode || rm.code || '';
-                mat.materialName = rm.materialName || rm.name || '';
-                mat.unit = rm.unit || rm.uom || '';
-            }
-        }
-        newSteps[stepIdx].materials[matIdx] = mat;
-        setFormData({ ...formData, steps: newSteps });
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.routeCode || !formData.productId || !formData.workCenterId || formData.steps.length === 0) {
@@ -177,14 +135,6 @@ const ProcessRoutesPage = () => {
                 setupTimeMinutes: parseInt(s.setupTimeMinutes) || 0,
                 runTimePerUnitMinutes: parseInt(s.runTimePerUnitMinutes) || 0,
                 notes: s.notes || null,
-                materials: s.materials.map(m => ({
-                    bomLineId: null,
-                    rawMaterialId: m.rawMaterialId,
-                    materialCode: m.materialCode,
-                    materialName: m.materialName,
-                    quantity: parseFloat(m.quantity) || 0,
-                    unit: m.unit,
-                })),
             })),
         };
 
@@ -206,6 +156,24 @@ const ProcessRoutesPage = () => {
     const getProductName = (pid) => {
         const p = products.find(pr => (pr.id || pr.productId) === pid);
         return p ? `${p.productName || p.name} (${p.productCode || p.code})` : pid;
+    };
+
+    // Helper to get display values for SearchSelect
+    const getProductDisplayValue = (pid) => {
+        const p = products.find(pr => (pr.id || pr.productId) === pid);
+        return p ? `${p.productName || p.name} (${p.productCode || p.code})` : '';
+    };
+    const getWCDisplayValue = (wcId) => {
+        const wc = workCenters.find(w => w.workCenterId === wcId);
+        return wc ? `${wc.centerName} (${wc.centerCode})` : '';
+    };
+    const getProcessDisplayValue = (procId) => {
+        const p = processes.find(pr => pr.processId === procId);
+        return p ? `${p.processCode} — ${p.processName}` : '';
+    };
+    const getEquipmentDisplayValue = (eqId) => {
+        const eq = equipmentList.find(e => e.equipmentId === eqId);
+        return eq ? `${eq.equipmentCode} — ${eq.equipmentName || ''}` : '';
     };
 
     return (
@@ -269,7 +237,7 @@ const ProcessRoutesPage = () => {
                                         </button>
                                     </td>
                                 </tr>
-                                {/* Expanded: Steps */}
+                                {/* Expanded: Steps — NO materials */}
                                 {expandedId === route.processRouteId && (
                                     <tr>
                                         <td colSpan="8" className="bg-slate-50 px-6 py-4">
@@ -281,7 +249,6 @@ const ProcessRoutesPage = () => {
                                                         <th className="text-left py-1">Equipment</th>
                                                         <th className="text-left py-1">Setup (min)</th>
                                                         <th className="text-left py-1">Run/Unit (min)</th>
-                                                        <th className="text-left py-1">Materials</th>
                                                         <th className="text-left py-1">Notes</th>
                                                     </tr>
                                                 </thead>
@@ -293,18 +260,6 @@ const ProcessRoutesPage = () => {
                                                             <td className="py-2 text-slate-600">{step.equipmentCode || '-'}</td>
                                                             <td className="py-2">{step.setupTimeMinutes}</td>
                                                             <td className="py-2">{step.runTimePerUnitMinutes}</td>
-                                                            <td className="py-2">
-                                                                {(step.materials || []).length === 0 ? <span className="text-slate-400">-</span> : (
-                                                                    <div className="space-y-0.5">
-                                                                        {step.materials.map((m, i) => (
-                                                                            <div key={i} className="flex gap-2">
-                                                                                <span className="text-slate-700">{m.materialName}</span>
-                                                                                <span className="text-slate-500">×{m.quantity} {m.unit}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </td>
                                                             <td className="py-2 text-slate-500">{step.notes || '-'}</td>
                                                         </tr>
                                                     ))}
@@ -337,25 +292,39 @@ const ProcessRoutesPage = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Product *</label>
-                                    <select value={formData.productId} onChange={(e) => setFormData({...formData, productId: e.target.value})}
-                                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white" required>
-                                        <option value="">Select product...</option>
-                                        {products.map(p => (
-                                            <option key={p.id || p.productId} value={p.id || p.productId}>{p.productName || p.name} ({p.productCode || p.code})</option>
-                                        ))}
-                                    </select>
+                                    <SearchSelect
+                                        value={formData.productId}
+                                        displayValue={getProductDisplayValue(formData.productId)}
+                                        placeholder="Search product..."
+                                        items={products}
+                                        title="Select Product"
+                                        displayFields={[
+                                            { key: 'productCode', label: 'Code', width: '30%', bold: true },
+                                            { key: 'productName', label: 'Name', width: '70%' },
+                                        ]}
+                                        searchKeys={['productCode', 'productName', 'code', 'name']}
+                                        valueKey="id"
+                                        onSelect={(p) => setFormData({...formData, productId: p.id || p.productId})}
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Default Work Center *</label>
-                                    <select value={formData.workCenterId} onChange={(e) => setFormData({...formData, workCenterId: e.target.value})}
-                                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white" required>
-                                        <option value="">Select work center...</option>
-                                        {workCenters.map(wc => (
-                                            <option key={wc.workCenterId} value={wc.workCenterId}>{wc.centerName} ({wc.centerCode})</option>
-                                        ))}
-                                    </select>
+                                    <SearchSelect
+                                        value={formData.workCenterId}
+                                        displayValue={getWCDisplayValue(formData.workCenterId)}
+                                        placeholder="Search work center..."
+                                        items={workCenters}
+                                        title="Select Work Center"
+                                        displayFields={[
+                                            { key: 'centerCode', label: 'Code', width: '30%', bold: true },
+                                            { key: 'centerName', label: 'Name', width: '70%' },
+                                        ]}
+                                        searchKeys={['centerCode', 'centerName']}
+                                        valueKey="workCenterId"
+                                        onSelect={(wc) => setFormData({...formData, workCenterId: wc.workCenterId})}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Description</label>
@@ -364,7 +333,7 @@ const ProcessRoutesPage = () => {
                                 </div>
                             </div>
 
-                            {/* Steps */}
+                            {/* Steps — NO materials */}
                             <div>
                                 <div className="flex items-center justify-between mb-3">
                                     <h3 className="font-semibold text-slate-700">Steps ({formData.steps.length})</h3>
@@ -377,30 +346,50 @@ const ProcessRoutesPage = () => {
                                     <div key={si} className="bg-slate-50 rounded-xl p-4 mb-3 border border-slate-200">
                                         <div className="flex items-center justify-between mb-3">
                                             <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold">Step #{step.stepNumber}</span>
-                                            {formData.steps.length > 1 && (
-                                                <button type="button" onClick={() => removeStep(si)} className="text-red-500 hover:text-red-600 text-xs">Remove</button>
-                                            )}
+                                            <button type="button" onClick={() => removeStep(si)}
+                                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-red-500 hover:text-red-700 hover:bg-red-50 transition"
+                                                title="Delete step">
+                                                <Trash2 size={13} /> Remove
+                                            </button>
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                                             <div>
                                                 <label className="block text-xs text-slate-500 mb-1">Process *</label>
-                                                <select value={step.processId} onChange={(e) => updateStep(si, 'processId', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border rounded text-xs bg-white" required>
-                                                    <option value="">Select...</option>
-                                                    {processes.map(p => (
-                                                        <option key={p.processId} value={p.processId}>{p.processCode} — {p.processName}</option>
-                                                    ))}
-                                                </select>
+                                                <SearchSelect
+                                                    value={step.processId}
+                                                    displayValue={getProcessDisplayValue(step.processId)}
+                                                    placeholder="Select..."
+                                                    items={processes}
+                                                    title="Select Process"
+                                                    displayFields={[
+                                                        { key: 'processCode', label: 'Code', width: '25%', bold: true },
+                                                        { key: 'processName', label: 'Name', width: '45%' },
+                                                        { key: 'category', label: 'Category', width: '30%' },
+                                                    ]}
+                                                    searchKeys={['processCode', 'processName', 'category']}
+                                                    valueKey="processId"
+                                                    onSelect={(p) => updateStep(si, 'processId', p.processId)}
+                                                    size="sm"
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-slate-500 mb-1">Equipment</label>
-                                                <select value={step.equipmentId} onChange={(e) => updateStep(si, 'equipmentId', e.target.value)}
-                                                    className="w-full px-2 py-1.5 border rounded text-xs bg-white">
-                                                    <option value="">None</option>
-                                                    {equipmentList.map(eq => (
-                                                        <option key={eq.equipmentId} value={eq.equipmentId}>{eq.equipmentCode}</option>
-                                                    ))}
-                                                </select>
+                                                <SearchSelect
+                                                    value={step.equipmentId}
+                                                    displayValue={getEquipmentDisplayValue(step.equipmentId)}
+                                                    placeholder="None"
+                                                    items={equipmentList}
+                                                    title="Select Equipment"
+                                                    displayFields={[
+                                                        { key: 'equipmentCode', label: 'Code', width: '40%', bold: true },
+                                                        { key: 'equipmentName', label: 'Name', width: '60%' },
+                                                    ]}
+                                                    searchKeys={['equipmentCode', 'equipmentName']}
+                                                    valueKey="equipmentId"
+                                                    onSelect={(eq) => updateStep(si, 'equipmentId', eq.equipmentId)}
+                                                    onClear={() => updateStep(si, 'equipmentId', '')}
+                                                    size="sm"
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-slate-500 mb-1">Setup (min)</label>
@@ -413,45 +402,10 @@ const ProcessRoutesPage = () => {
                                                     className="w-full px-2 py-1.5 border rounded text-xs" />
                                             </div>
                                         </div>
-                                        <div className="mb-3">
+                                        <div>
                                             <label className="block text-xs text-slate-500 mb-1">Notes</label>
                                             <input type="text" value={step.notes} onChange={(e) => updateStep(si, 'notes', e.target.value)}
                                                 className="w-full px-2 py-1.5 border rounded text-xs" placeholder="Step notes" />
-                                        </div>
-
-                                        {/* Materials for this step */}
-                                        <div className="border-t border-slate-200 pt-2 mt-2">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="text-xs font-semibold text-slate-500">Materials ({step.materials.length})</span>
-                                                <button type="button" onClick={() => addMaterial(si)} className="text-xs text-blue-600 hover:text-blue-700">+ Add Material</button>
-                                            </div>
-                                            {step.materials.map((mat, mi) => (
-                                                <div key={mi} className="grid grid-cols-4 gap-2 mb-2 items-end">
-                                                    <div>
-                                                        <label className="block text-[10px] text-slate-400">Material</label>
-                                                        <select value={mat.rawMaterialId} onChange={(e) => updateMaterial(si, mi, 'rawMaterialId', e.target.value)}
-                                                            className="w-full px-1.5 py-1 border rounded text-xs bg-white" required>
-                                                            <option value="">Select...</option>
-                                                            {rawMaterials.map(rm => (
-                                                                <option key={rm.id || rm.rawMaterialId} value={rm.id || rm.rawMaterialId}>
-                                                                    {rm.materialName || rm.name} ({rm.materialCode || rm.code})
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[10px] text-slate-400">Quantity</label>
-                                                        <input type="number" step="any" value={mat.quantity} onChange={(e) => updateMaterial(si, mi, 'quantity', e.target.value)}
-                                                            className="w-full px-1.5 py-1 border rounded text-xs" required />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[10px] text-slate-400">Unit</label>
-                                                        <input type="text" value={mat.unit} onChange={(e) => updateMaterial(si, mi, 'unit', e.target.value)}
-                                                            className="w-full px-1.5 py-1 border rounded text-xs" placeholder="kg/pcs" />
-                                                    </div>
-                                                    <button type="button" onClick={() => removeMaterial(si, mi)} className="text-red-500 text-xs hover:text-red-600 pb-1">✕</button>
-                                                </div>
-                                            ))}
                                         </div>
                                     </div>
                                 ))}

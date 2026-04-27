@@ -10,5 +10,6 @@ namespace MyERP.Services.Inventory.DTOs.RawMaterials
         public decimal Cost { get; set; }
         public decimal MinStockLevel { get; set; }
         public string? Supplier { get; set; }
+        public Guid? DefaultStorageLocationId { get; set; }
     }
 }

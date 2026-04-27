@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Production.DTOs.WorkOrder;
 using MyERP.Services.Production.Middleware;
 using MyERP.Services.Production.Services.WorkOrder;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production")]
+    [Authorize]
     public class WorkOrdersController : ControllerBase
     {
         private readonly IWorkOrderService _service;

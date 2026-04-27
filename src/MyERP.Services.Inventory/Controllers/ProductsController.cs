@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Inventory.DTOs;
 using MyERP.Services.Inventory.DTOs.Products;
 using MyERP.Services.Inventory.Services.Products;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Inventory.Controllers
 {
     [ApiController]
     [Route("api/inventory/products")]
+    [Authorize]
     public class ProductsController : ControllerBase
     {
         private readonly IProductService _productService;
@@ -71,17 +73,17 @@ namespace MyERP.Services.Inventory.Controllers
             return Ok(ApiResponse<ProductAvailabilityDto>.Ok(result));
         }
 
-        [HttpPost("{id}/add-stock")]
-        public async Task<IActionResult> AddStock(Guid id, [FromBody] AddStockDto dto)
+        [HttpPost("{id}/update-stock")]
+        public async Task<IActionResult> UpdateStock(Guid id, [FromBody] UpdateStockDto dto)
         {
-            await _productService.AddStockAsync(id, dto.WarehouseId, dto.Quantity, dto.BatchNumber);
-            return Ok(ApiResponse.Ok("Stock added successfully"));
+            await _productService.UpdateProductInventoryAsync(id, dto.StorageLocationId, dto.Quantity, dto.BatchNumber);
+            return Ok(ApiResponse.Ok("Stock updated successfully"));
         }
     }
 
-    public class AddStockDto
+    public class UpdateStockDto
     {
-        public Guid WarehouseId { get; set; }
+        public Guid StorageLocationId { get; set; }
         public decimal Quantity { get; set; }
         public string? BatchNumber { get; set; }
     }

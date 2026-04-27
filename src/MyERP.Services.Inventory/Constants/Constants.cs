@@ -11,7 +11,9 @@ namespace MyERP.Services.Inventory.Constants
         public const string RESERVE = "RESERVE";
         public const string RELEASE = "RELEASE";
         public const string ADJUST = "ADJUST";
+        public const string ADJUST_OUT = "ADJUST_OUT";
         public const string SCRAP = "SCRAP";
+        public const string TRANSFER = "TRANSFER";
     }
     public static class ItemType
     {

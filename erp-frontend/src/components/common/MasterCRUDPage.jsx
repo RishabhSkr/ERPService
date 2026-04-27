@@ -28,6 +28,7 @@ const MasterCRUDPage = ({
     deleteFn,
     idKey = 'id',
     dataPath = 'data.data',
+    customActions = [],
 }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -36,9 +37,15 @@ const MasterCRUDPage = ({
     const [formData, setFormData] = useState({});
 
     const extractData = (response) => {
+        if (Array.isArray(response)) return response;
+        if (!dataPath) return response?.items || response?.data || response || [];
+        
         const paths = dataPath.split('.');
         let data = response;
-        for (const p of paths) data = data?.[p];
+        for (const p of paths) {
+            if (!data) break;
+            data = data[p];
+        }
         return Array.isArray(data) ? data : (data?.items || data || []);
     };
 
@@ -59,7 +66,13 @@ const MasterCRUDPage = ({
     const openCreate = () => {
         setEditItem(null);
         const empty = {};
-        formFields.forEach(f => { empty[f.key] = f.defaultValue || ''; });
+        formFields.forEach(f => {
+            if (f.type === 'checkbox') {
+                empty[f.key] = f.defaultValue !== undefined ? f.defaultValue : false;
+            } else {
+                empty[f.key] = f.defaultValue || '';
+            }
+        });
         setFormData(empty);
         setShowForm(true);
     };
@@ -67,7 +80,13 @@ const MasterCRUDPage = ({
     const openEdit = (item) => {
         setEditItem(item);
         const data = {};
-        formFields.forEach(f => { data[f.key] = item[f.key] ?? ''; });
+        formFields.forEach(f => {
+            if (f.type === 'checkbox') {
+                data[f.key] = item[f.key] ?? false;
+            } else {
+                data[f.key] = item[f.key] ?? '';
+            }
+        });
         setFormData(data);
         setShowForm(true);
     };
@@ -147,6 +166,19 @@ const MasterCRUDPage = ({
                                 ))}
                                 <td className="px-4 py-3 text-center">
                                     <div className="flex items-center justify-center gap-1">
+                                        {customActions.map((action, actionIdx) => {
+                                            const ActionIcon = action.icon;
+                                            return (
+                                                <button
+                                                    key={actionIdx}
+                                                    onClick={() => action.onClick(item)}
+                                                    className={`p-1.5 rounded hover:bg-blue-50 ${action.className || 'text-slate-500 hover:text-blue-600'}`}
+                                                    title={action.label}
+                                                >
+                                                    <ActionIcon size={15} />
+                                                </button>
+                                            );
+                                        })}
                                         <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-blue-50 text-slate-500 hover:text-blue-600" title="Edit">
                                             <Edit2 size={15} />
                                         </button>
@@ -189,6 +221,16 @@ const MasterCRUDPage = ({
                                                 <option key={o.value} value={o.value}>{o.label}</option>
                                             ))}
                                         </select>
+                                    ) : field.type === 'checkbox' ? (
+                                        <label className="flex items-center gap-3 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!formData[field.key]}
+                                                onChange={(e) => setFormData({ ...formData, [field.key]: e.target.checked })}
+                                                className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm text-slate-600">{formData[field.key] ? 'Enabled' : 'Disabled'}</span>
+                                        </label>
                                     ) : (
                                         <input
                                             type={field.type || 'text'}
@@ -197,6 +239,7 @@ const MasterCRUDPage = ({
                                             className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                                             required={field.required}
                                             step={field.type === 'number' ? 'any' : undefined}
+                                            placeholder={field.placeholder || ''}
                                         />
                                     )}
                                 </div>

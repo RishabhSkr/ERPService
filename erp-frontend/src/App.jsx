@@ -25,6 +25,9 @@ import ProcessRoutesPage from './pages/production/ProcessRoutesPage';
 // Inventory Pages
 import Categories from './pages/masters/Categories';
 import Units from './pages/masters/Units';
+import Warehouses from './pages/masters/Warehouses';
+import StorageLocations from './pages/masters/StorageLocations';
+import StorageLocationTypes from './pages/masters/StorageLocationTypes';
 import StockMovements from './pages/inventory/StockMovements';
 
 
@@ -59,6 +62,9 @@ function App() {
           <Route path="/masters/products" element={<Products />} />
           <Route path="/masters/categories" element={<Categories />} />
           <Route path="/masters/units" element={<Units />} />
+          <Route path="/masters/warehouses" element={<Warehouses />} />
+          <Route path="/masters/storage-locations" element={<StorageLocations />} />
+          <Route path="/masters/storage-location-types" element={<StorageLocationTypes />} />
 
           {/* Inventory Routes */}
           <Route path="/inventory/raw-material" element={<AddRawMaterialStock />} />

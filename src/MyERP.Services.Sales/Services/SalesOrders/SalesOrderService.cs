@@ -373,6 +373,8 @@ namespace MyERP.Services.Sales.Services.SalesOrders
                     ProductId = i.ProductId,
                     ProductCode = i.ProductCode,
                     ProductName = i.ProductName,
+                    QuantityProduced = i.QuantityProduced,
+                    QuantityDispatched = i.QuantityDispatched,
                     Quantity = i.Quantity,
                     UnitPrice = i.UnitPrice,
                     TotalPrice = i.TotalPrice

@@ -14,9 +14,12 @@ using MyERP.Services.Inventory.Services.Units;
 using MyERP.Services.Inventory.Services.Products;
 using MyERP.Services.Inventory.Services.RawMaterials;
 using MyERP.Services.Inventory.Services.StockMovements;
+using MyERP.Services.Inventory.Services.Warehouses;
 using MyERP.Services.Inventory.Validators;
 using MassTransit;
 using MyERP.Services.Inventory.Events.Consumers;
+using MyERP.Services.Inventory.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -87,12 +90,24 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+    {
+        policy.Requirements.Add(new PermissionRequirement());
+    });
+});
 // 6. Register Repositories
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IUnitRepository, UnitRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IRawMaterialRepository, RawMaterialRepository>();
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+builder.Services.AddScoped<IStorageLocationTypeRepository, StorageLocationTypeRepository>();
+builder.Services.AddScoped<IStorageLocationRepository, StorageLocationRepository>();
 builder.Services.AddScoped<IStockMovementRepository, StockMovementRepository>();
 
 // 7. Register Services
@@ -101,6 +116,9 @@ builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IRawMaterialService, RawMaterialService>();
 builder.Services.AddScoped<IStockMovementService, StockMovementService>();
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
+builder.Services.AddScoped<IStorageLocationTypeService, StorageLocationTypeService>();
+builder.Services.AddScoped<IStorageLocationService, StorageLocationService>();
 
 // 8. CORS (for frontend access)
 builder.Services.AddCors(options =>

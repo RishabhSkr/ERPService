@@ -84,6 +84,15 @@ export const useSales = () => {
         return response.success;
     }, [requestHandlerFunction]);
 
+    // ─── Force Complete (Ship) Order ───
+    const forceComplete = useCallback(async (id) => {
+        const response = await requestHandlerFunction(
+            () => updateOrderStatus(id, { status: 'Shipped', notes: 'Force completed after partial cancellation' }),
+            'Order Force Shipped!'
+        );
+        return response.success;
+    }, [requestHandlerFunction]);
+
     // ─── Cancel Order ───
     const handleCancel = useCallback(async (id, reason = 'Cancelled by user') => {
         const response = await requestHandlerFunction(
@@ -139,6 +148,7 @@ export const useSales = () => {
         fetchOrders,
         fetchOrderById,
         confirmOrder,
+        forceComplete,
         handleCancel,
         handleDispatch,
         handleDeliver,

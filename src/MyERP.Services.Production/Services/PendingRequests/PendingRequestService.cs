@@ -111,6 +111,8 @@ namespace MyERP.Services.Production.Services.PendingRequests
                     ProductCode = item.ProductCode,
                     ProductName = item.ProductName,
                     BOMId = bom.BOMId,
+                    BomCode = bom.BomCode,
+                    BomVersion = bom.Version,
                     QuantityPlanned = item.Quantity,
                     PlannedStartDate = dto.PlannedStartDate,
                     PlannedEndDate = dto.PlannedStartDate.AddDays(7), // Default 7 days

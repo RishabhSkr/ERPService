@@ -3,6 +3,7 @@ import { X, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createOrder, getCustomers } from '../../api/salesOrderService';
 import { getProducts } from '../../api/master/product';
+import SearchSelect from '../common/SearchSelect';
 
 // Fallback hardcoded customers (in case API fails)
 const FALLBACK_CUSTOMERS = [
@@ -118,18 +119,20 @@ const CreateOrderModal = ({ onClose, onCreated }) => {
                     {/* Customer */}
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">Customer</label>
-                        <select
+                        <SearchSelect
                             value={customerId}
-                            onChange={(e) => setCustomerId(e.target.value)}
-                            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                            <option value="">Select Customer...</option>
-                            {displayCustomers.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {c.customerName || c.name} ({c.customerCode || c.code})
-                                </option>
-                            ))}
-                        </select>
+                            displayValue={(() => { const c = displayCustomers.find(c => c.id === customerId); return c ? `${c.customerName || c.name} (${c.customerCode || c.code})` : ''; })()}
+                            placeholder="Search customer..."
+                            items={displayCustomers}
+                            title="Select Customer"
+                            displayFields={[
+                                { key: 'customerCode', label: 'Code', width: '30%', bold: true },
+                                { key: 'customerName', label: 'Name', width: '70%' },
+                            ]}
+                            searchKeys={['customerCode', 'customerName', 'code', 'name']}
+                            valueKey="id"
+                            onSelect={(c) => setCustomerId(c.id)}
+                        />
                     </div>
 
                     {/* Notes */}
@@ -166,18 +169,22 @@ const CreateOrderModal = ({ onClose, onCreated }) => {
                                 <div key={index} className="flex gap-3 items-end bg-slate-50 p-3 rounded-lg">
                                     <div className="flex-1">
                                         <label className="text-xs text-slate-500 mb-1 block">Product</label>
-                                        <select
+                                        <SearchSelect
                                             value={item.productId}
-                                            onChange={(e) => updateItem(index, 'productId', e.target.value)}
-                                            className="w-full px-2.5 py-2 border border-slate-300 rounded-lg text-sm"
-                                        >
-                                            <option value="">Select product...</option>
-                                            {products.map(p => (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.productName || p.productCode} — ₹{p.price}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            displayValue={(() => { const p = products.find(p => p.id === item.productId); return p ? `${p.productName || p.productCode} — ₹${p.price}` : ''; })()}
+                                            placeholder="Select product..."
+                                            items={products}
+                                            title="Select Product"
+                                            displayFields={[
+                                                { key: 'productCode', label: 'Code', width: '25%', bold: true },
+                                                { key: 'productName', label: 'Name', width: '50%' },
+                                                { key: 'price', label: 'Price', width: '25%' },
+                                            ]}
+                                            searchKeys={['productCode', 'productName']}
+                                            valueKey="id"
+                                            onSelect={(p) => updateItem(index, 'productId', p.id)}
+                                            size="sm"
+                                        />
                                     </div>
                                     <div className="w-24">
                                         <label className="text-xs text-slate-500 mb-1 block">Qty</label>

@@ -1,13 +1,13 @@
 namespace MyERP.Services.Production.Constants
 {
     /// <summary>
-    /// Production Order lifecycle: Create → Released → InProgress → Completed
+    /// Production Order lifecycle: Created → Released → InProgress → Completed
     ///                                       ↓
     ///                                   Cancelled (from any state except Completed)
     /// </summary>
     public static class ProductionOrderStatus
     {
-        public const string Create = "Create";
+        public const string Create = "Created";
         public const string Released = "Released";
         public const string InProgress = "InProgress";
         public const string Completed = "Completed";

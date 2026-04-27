@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Factory, Plus, Eye, Play, RotateCcw, XCircle, Zap, Pause, CheckCircle } from 'lucide-react';
+import { Factory, Plus, Eye, Play, RotateCcw, XCircle, Zap, Pause, CheckCircle, Loader } from 'lucide-react';
 import useApi from '../../hooks/useApi';
 import {
     getAllOrders,
@@ -13,6 +13,7 @@ import CreateWOModal from '../../components/production/CreateWOModal';
 import ActivateWOModal from '../../components/production/ActivateWOModal';
 import CompleteExecutionModal from '../../components/production/CompleteExecutionModal';
 import WODetailModal from '../../components/production/WODetailModal';
+import SearchSelect from '../../components/common/SearchSelect';
 
 const STATUS_COLORS = {
     Pending: 'bg-yellow-100 text-yellow-700',
@@ -59,12 +60,30 @@ const WOManagement = () => {
     useEffect(() => { fetchPOs(); }, [fetchPOs]);
     useEffect(() => { fetchWOs(); }, [fetchWOs]);
 
+    // Background polling for pending reservations (RabbitMQ async response)
+    useEffect(() => {
+        let interval;
+        const hasPending = workOrders.some(wo => wo.status === 'Released' && wo.reservationStatus === 'Pending');
+        if (hasPending && selectedPOId) {
+            interval = setInterval(async () => {
+                try {
+                    const res = await getWorkOrdersByPO(selectedPOId);
+                    const data = res.data?.data?.data || res.data?.data || [];
+                    setWorkOrders(Array.isArray(data) ? data : []);
+                } catch (e) {
+                    console.error('Polling error', e);
+                }
+            }, 1500); // Poll every 1.5s
+        }
+        return () => clearInterval(interval);
+    }, [workOrders, selectedPOId]);
+
     const selectedPO = poList.find(p => p.id === selectedPOId);
 
     // ─── WO Actions ───
     const handleRelease = async (woId) => {
-        const res = await requestHandlerFunction(() => releaseWO(woId), 'WO Released!');
-        if (res.success) fetchWOs();
+        const res = await requestHandlerFunction(() => releaseWO(woId), 'WO Released! Reserving materials...');
+        if (res.success) fetchWOs(); // The polling useEffect will take over
     };
 
     const handleCancel = async (woId) => {
@@ -75,8 +94,8 @@ const WOManagement = () => {
     };
 
     const handleRetry = async (woId) => {
-        const res = await requestHandlerFunction(() => retryWOReservation(woId), 'Retry initiated.');
-        if (res.success) fetchWOs();
+        const res = await requestHandlerFunction(() => retryWOReservation(woId), 'Retry initiated...');
+        if (res.success) fetchWOs(); // The polling useEffect will take over
     };
 
     const handlePause = async (woId, execId) => {
@@ -107,18 +126,24 @@ const WOManagement = () => {
 
                 <div className="flex items-center gap-3">
                     {/* PO Selector */}
-                    <select
+                    <SearchSelect
                         value={selectedPOId}
-                        onChange={(e) => setSelectedPOId(e.target.value)}
-                        className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[220px]"
-                    >
-                        <option value="">Select Production Order...</option>
-                        {poList.map(po => (
-                            <option key={po.id} value={po.id}>
-                                {po.orderNumber} — {po.productName} ({po.quantityPlanned} qty)
-                            </option>
-                        ))}
-                    </select>
+                        displayValue={(() => { const po = poList.find(p => p.id === selectedPOId); return po ? `${po.orderNumber} — ${po.productName} (${po.quantityPlanned} qty)` : ''; })()}
+                        placeholder="Search Production Order..."
+                        items={poList}
+                        title="Select Production Order"
+                        displayFields={[
+                            { key: 'orderNumber', label: 'PO#', width: '25%', bold: true },
+                            { key: 'productName', label: 'Product', width: '45%' },
+                            { key: 'quantityPlanned', label: 'Qty', width: '15%' },
+                            { key: 'status', label: 'Status', width: '15%' },
+                        ]}
+                        searchKeys={['orderNumber', 'productName', 'productCode']}
+                        valueKey="id"
+                        onSelect={(po) => setSelectedPOId(po.id)}
+                        onClear={() => setSelectedPOId('')}
+                        className="min-w-[260px]"
+                    />
 
                     {/* Create WO button */}
                     {selectedPOId && (
@@ -209,11 +234,17 @@ const WOManagement = () => {
                                                     {wo.status}
                                                 </span>
                                                 {wo.reservationStatus && wo.status === 'Released' && (
-                                                    <div className={`text-xs mt-0.5 font-medium ${
+                                                    <div className={`text-xs mt-0.5 font-medium flex items-center gap-1 ${
                                                         wo.reservationStatus === 'Reserved' ? 'text-green-600' :
-                                                        wo.reservationStatus === 'Failed' ? 'text-red-500' : 'text-yellow-600'
+                                                        wo.reservationStatus === 'Failed' ? 'text-red-500' : 'text-orange-600'
                                                     }`}>
-                                                        📦 {wo.reservationStatus}
+                                                        {wo.reservationStatus === 'Pending' ? (
+                                                            <>⚠ Pending — Retry</>
+                                                        ) : wo.reservationStatus === 'Failed' ? (
+                                                            <>❌ Failed — Retry</>
+                                                        ) : (
+                                                            `📦 ${wo.reservationStatus}`
+                                                        )}
                                                     </div>
                                                 )}
                                                 {activeExec && (
@@ -261,8 +292,8 @@ const WOManagement = () => {
                                                         </>
                                                     )}
 
-                                                    {/* Released + Failed → Retry */}
-                                                    {wo.status === 'Released' && wo.reservationStatus === 'Failed' && (
+                                                    {/* Released + Failed or Pending → Retry */}
+                                                    {wo.status === 'Released' && (wo.reservationStatus === 'Failed' || wo.reservationStatus === 'Pending') && (
                                                         <>
                                                             <button onClick={() => handleRetry(wo.workOrderId)} disabled={loading}
                                                                 className="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1">

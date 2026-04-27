@@ -5,6 +5,7 @@ using MyERP.Services.Inventory.DTOs.StockMovements;
 using MyERP.Services.Inventory.Services.StockMovements;
 using MyERP.Services.Inventory.Constants;
 using Microsoft.EntityFrameworkCore;
+using MyERP.Services.Inventory.Models;
 
 namespace MyERP.Services.Inventory.Events.Consumers;
 
@@ -78,7 +79,7 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                                             && sm.WorkOrderId == null
                                             && sm.MovementType == MovementType.RESERVE);
 
-            var warehouseId = reservation?.WarehouseId ?? Guid.Empty;
+            var storageLocationId = reservation?.FromLocationId ?? Guid.Empty;
 
             // A: Release reservation (ReservedStock -= consumed)
             if (reservation != null)
@@ -88,7 +89,7 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                     MovementType  = MovementType.RELEASE,
                     ItemType      = ItemType.RAW_MATERIAL,
                     ItemId        = material.RawMaterialId,
-                    WarehouseId   = warehouseId,
+                    StorageLocationId   = storageLocationId,
                     Quantity      = material.QuantityConsumed,
                     ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
@@ -105,7 +106,7 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                 MovementType  = MovementType.OUT,
                 ItemType      = ItemType.RAW_MATERIAL,
                 ItemId        = material.RawMaterialId,
-                WarehouseId   = warehouseId,
+                StorageLocationId   = storageLocationId,
                 Quantity      = material.QuantityConsumed,
                 ReferenceType = ReferenceType.PRODUCTION_ORDER,
                 ReferenceId   = @event.ProductionOrderId,
@@ -126,7 +127,7 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                     MovementType  = MovementType.RELEASE,
                     ItemType      = ItemType.RAW_MATERIAL,
                     ItemId        = material.RawMaterialId,
-                    WarehouseId   = warehouseId,
+                    StorageLocationId   = storageLocationId,
                     Quantity      = material.QuantityReturned,
                     ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
@@ -144,15 +145,16 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
         // ─── Step 2: Add finished goods to Product inventory ───
         if (@event.QuantityGood > 0)
         {
-            var warehouse = await _context.Warehouses.FirstOrDefaultAsync();
-            if (warehouse != null)
+            var targetLocationId = await GetTargetStorageLocationId(@event.ProductId);
+
+            if (targetLocationId != Guid.Empty)
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
                 {
                     MovementType  = MovementType.IN,
                     ItemType      = ItemType.PRODUCT,
                     ItemId        = @event.ProductId,
-                    WarehouseId   = warehouse.Id,
+                    StorageLocationId = targetLocationId,
                     Quantity      = @event.QuantityGood,
                     ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
@@ -162,23 +164,24 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                     CreatedBy     = SystemUser.Id
                 });
 
-                _logger.LogInformation("Added {Qty} finished goods of {ProductCode} for {Target}",
-                    @event.QuantityGood, @event.ProductCode, targetLabel);
+                _logger.LogInformation("Added {Qty} finished goods of {ProductCode} for {Target} to Location {LocId}",
+                    @event.QuantityGood, @event.ProductCode, targetLabel, targetLocationId);
             }
         }
 
         // ─── Step 3: Handle product scrap ───
         if (@event.QuantityScrap > 0)
         {
-            var warehouse = await _context.Warehouses.FirstOrDefaultAsync();
-            if (warehouse != null)
+            var scrapLocationId = await GetScrapStorageLocationId();
+
+            if (scrapLocationId != Guid.Empty)
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
                 {
                     MovementType  = MovementType.SCRAP,
                     ItemType      = ItemType.PRODUCT,
                     ItemId        = @event.ProductId,
-                    WarehouseId   = warehouse.Id,
+                    StorageLocationId = scrapLocationId,
                     Quantity      = @event.QuantityScrap,
                     ReferenceType = ReferenceType.PRODUCTION_ORDER,
                     ReferenceId   = @event.ProductionOrderId,
@@ -191,5 +194,41 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
         }
 
         _logger.LogInformation("Batch concluded processing complete for {Target}", targetLabel);
+    }
+
+    private async Task<Guid> GetTargetStorageLocationId(Guid productId)
+    {
+        var product = await _context.Products.FindAsync(productId);
+        if (product != null && product.DefaultStorageLocationId.HasValue)
+        {
+            return product.DefaultStorageLocationId.Value;
+        }
+
+        // Fallback to a System/Staging location
+        var stagingLocation = await _context.StorageLocations
+            .Include(l => l.Warehouse)
+            .FirstOrDefaultAsync(l => l.Warehouse != null && l.Warehouse.Type == WarehouseType.System);
+
+        if (stagingLocation != null)
+            return stagingLocation.Id;
+
+        // Fallback to ANY location
+        var anyLoc = await _context.StorageLocations.FirstOrDefaultAsync();
+        return anyLoc?.Id ?? Guid.Empty;
+    }
+
+    private async Task<Guid> GetScrapStorageLocationId()
+    {
+        // Try to find a Scrap location
+        var scrapLocation = await _context.StorageLocations
+            .Include(l => l.Warehouse)
+            .FirstOrDefaultAsync(l => l.Warehouse != null && l.Warehouse.Type == WarehouseType.Scrap);
+
+        if (scrapLocation != null)
+            return scrapLocation.Id;
+
+        // Fallback
+        var anyLoc = await _context.StorageLocations.FirstOrDefaultAsync();
+        return anyLoc?.Id ?? Guid.Empty;
     }
 }

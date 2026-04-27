@@ -55,6 +55,7 @@ namespace MyERP.Services.Sales.Events.Consumers
 
             // Auto-update Sales Order status to InProduction (if still Confirmed)
             var salesOrder = await _context.SalesOrders.FindAsync(@event.SalesOrderId.Value);
+            
             if (salesOrder != null && salesOrder.OrderStatus == SalesOrderStatus.CONFIRMED)
             {
                 salesOrder.OrderStatus = SalesOrderStatus.IN_PRODUCTION;

@@ -11,7 +11,9 @@ namespace MyERP.Services.Inventory.Models
         public Guid WarehouseId { get; set; }
         public Warehouse? Warehouse { get; set; }
         
-        public string? LocationCode { get; set; } // Bin-B-20
+        public Guid StorageLocationId { get; set; }
+        public StorageLocation? StorageLocation { get; set; }
+        
         public decimal CurrentStock { get; set; } = 0;
         public decimal ReservedStock { get; set; } = 0;
         public string? BatchNumber { get; set; }

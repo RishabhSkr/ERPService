@@ -8,6 +8,8 @@ IdentityModelEventSource.ShowPII = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+
 // 1. JWT Authentication Configuration
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSettings["Key"]!;
@@ -60,8 +62,20 @@ builder.Services.AddAuthorization(options =>
 // 3. Add YARP Reverse Proxy
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+    
+// 8. CORS (for frontend access)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 
 var app = builder.Build();
+app.UseCors("AllowAll");
 
 // 4. Use Authentication & Authorization BEFORE YARP
 app.UseAuthentication();
@@ -69,5 +83,7 @@ app.UseAuthorization();
 
 // 5. Map reverse proxy routes
 app.MapReverseProxy();
+
+
 
 app.Run();

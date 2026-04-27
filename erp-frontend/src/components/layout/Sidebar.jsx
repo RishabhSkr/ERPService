@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
     LayoutDashboard, Factory, Box, Layers, ChevronDown, 
     ChevronRight, PlayCircle, Clock, ChefHat, ShoppingCart, 
-    ListOrdered, Cog, Building2, Wrench, ArrowUpDown, FolderTree, Ruler, Route
+    ListOrdered, Cog, Building2, Wrench, ArrowUpDown, FolderTree, Ruler, Route, MapPin
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -73,6 +73,16 @@ const Sidebar = () => {
                 { path: '/inventory/raw-material', name: 'Raw Material Stock', icon: Box },
                 { path: '/inventory/finished-goods', name: 'Finished Goods', icon: Box },
                 { path: '/inventory/stock-movements', name: 'Stock Movements', icon: ArrowUpDown },
+            ]
+        },
+        {
+            name: 'Warehouse Setup',
+            icon: Building2,
+            type: 'sub',
+            subItems: [
+                { path: '/masters/warehouses', name: 'Warehouses', icon: Building2 },
+                { path: '/masters/storage-locations', name: 'Storage Locations', icon: MapPin },
+                { path: '/masters/storage-location-types', name: 'Location Types', icon: Layers },
             ]
         },
 

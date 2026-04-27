@@ -50,6 +50,9 @@ using MyERP.Services.Production.Services.WorkCenter;
 using MyERP.Services.Production.Services.Equipment;
 using MyERP.Services.Production.Services.ProcessRoute;
 using MyERP.Services.Production.Services.WorkOrder;
+using MyERP.Services.Production.Authorization;
+using Microsoft.AspNetCore.Authorization;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================================================
@@ -94,12 +97,12 @@ var key = System.Text.Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
 
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
 })
 .AddJwtBearer(options =>
 {
-    options.TokenValidationParameters = new TokenValidationParameters
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
@@ -107,11 +110,20 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
+        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(key)
     };
 });
 
-builder.Services.AddAuthorization();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+    {
+        policy.Requirements.Add(new PermissionRequirement());
+    });
+});
 
 // ============================================================================
 // 5. DEPENDENCY INJECTION - REPOSITORIES

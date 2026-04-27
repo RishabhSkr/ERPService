@@ -96,6 +96,7 @@ const Production = () => {
                             <tr>
                                 <th className="px-5 py-3">Order</th>
                                 <th className="px-5 py-3">Product</th>
+                                <th className="px-5 py-3">BOM</th>
                                 <th className="px-5 py-3 text-center">Quantity</th>
                                 <th className="px-5 py-3 text-center">Progress</th>
                                 <th className="px-5 py-3">Status</th>
@@ -138,6 +139,19 @@ const Production = () => {
                                         <td className="px-5 py-3">
                                             <span className="font-medium text-slate-700">{order.productName}</span>
                                             <div className="text-xs text-slate-400">{order.productCode}</div>
+                                        </td>
+                                        {/* BOM */}
+                                        <td className="px-5 py-3">
+                                            {order.bomCode ? (
+                                                <div className="inline-flex flex-col gap-0.5">
+                                                    <span className="text-xs font-mono font-medium text-slate-700">{order.bomCode}</span>
+                                                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 w-max">
+                                                        v{order.bomVersion}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-slate-400">-</span>
+                                            )}
                                         </td>
                                         {/* Qty: Produced / Planned */}
                                         <td className="px-5 py-3 text-center">

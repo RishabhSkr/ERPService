@@ -18,6 +18,7 @@ namespace MyERP.Services.Inventory.Repositories.Products
             return await _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Unit)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
 
@@ -28,6 +29,7 @@ namespace MyERP.Services.Inventory.Repositories.Products
                 .Include(p => p.Unit)
                 .Include(p => p.ProductInventories!)
                     .ThenInclude(pi => pi.Warehouse)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
 
@@ -42,7 +44,12 @@ namespace MyERP.Services.Inventory.Repositories.Products
             var query = _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Unit)
-                .Include(p => p.ProductInventories)
+                .Include(p => p.ProductInventories!)
+                    .ThenInclude(pi => pi.StorageLocation)
+                .Include(p => p.ProductInventories!)
+                    .ThenInclude(pi => pi.Warehouse)
+                .Include(p => p.DefaultStorageLocation)
+                .AsSplitQuery()
                 .Where(p => p.IsActive)
                 .AsQueryable();
 
@@ -94,17 +101,16 @@ namespace MyERP.Services.Inventory.Repositories.Products
             await _context.SaveChangesAsync();
         }
 
-        public async Task<ProductInventory?> GetInventoryAsync(Guid productId, Guid warehouseId, string? batchNumber = null)
+        public async Task<ProductInventory?> GetInventoryAsync(Guid productId, Guid storageLocationId, string? batchNumber = null)
         {
             return await _context.ProductInventories
-                .FirstOrDefaultAsync(i => i.ProductId == productId && i.WarehouseId == warehouseId && i.BatchNumber == batchNumber);
+                .FirstOrDefaultAsync(i => i.ProductId == productId && i.StorageLocationId == storageLocationId && i.BatchNumber == batchNumber);
         }
 
-        public async Task<ProductInventory> AddInventoryAsync(ProductInventory inventory)
+        public async Task AddProductInventoryAsync(ProductInventory inventory)
         {
             _context.ProductInventories.Add(inventory);
             await _context.SaveChangesAsync();
-            return inventory;
         }
 
         public async Task UpdateInventoryAsync(ProductInventory inventory)
