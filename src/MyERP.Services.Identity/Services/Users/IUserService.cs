@@ -9,5 +9,7 @@ namespace MyERP.Services.Identity.Services.Users
         Task UpdateUserAsync(UpdateUserDto request);
         Task DeleteUserAsync(Guid userId);
         Task<Guid> CreateUserAsync(CreateUserDto request);
+        Task ApproveUserAsync(Guid userId, Guid roleId);
+        Task SuspendUserAsync(Guid userId);
     }
 }

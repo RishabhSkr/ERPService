@@ -26,6 +26,7 @@ namespace MyERP.Services.Identity.Services.Roles
                 IsActive = r.IsActive,
                 UserCount = r.Users?.Count ?? 0,
                 PermissionCount = r.RolePermissions?.Count ?? 0,
+                IsSystemRole = r.IsSystemRole,
                 CreatedAt = DateTime.UtcNow // Entity doesn't have CreatedAt, maybe add later? ignoring for now.
             }).ToList();
         }
@@ -75,7 +76,25 @@ namespace MyERP.Services.Identity.Services.Roles
         public async Task DeleteRoleAsync(Guid roleId)
         {
             // Optional: Check if role has users?
+            var role = await _userRepo.GetRoleByIdAsync(roleId);
+            if (role == null) throw new NotFoundException("Role not found");
+            if (role.IsSystemRole) throw new InvalidOperationException("System role cannot be deleted");
             await _userRepo.DeleteRoleAsync(roleId);
         }
+
+        public async Task<IEnumerable<RoleDto>> GetPublicRolesAsync()
+        {
+            var roles = await _userRepo.GetAllRolesAsync();
+            return roles
+                .Where(r => r.IsActive && r.RoleName != SystemConstants.RoleSuperAdmin && !r.IsSystemRole)
+                .Select(r => new RoleDto
+                {
+                    RoleId = r.Id,
+                    RoleName = r.RoleName,
+                    Description = r.Description
+                })
+                .ToList();
+        }
+
     }
 }

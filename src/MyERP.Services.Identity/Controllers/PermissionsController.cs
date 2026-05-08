@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Identity.DTOs; // For ApiResponse
+using MyERP.Services.Identity.DTOs.Auth;
 using MyERP.Services.Identity.DTOs.Permissions;
 using MyERP.Services.Identity.Services.Permissions;
+using MyERP.Services.Identity.Models;
 
 namespace MyERP.Services.Identity.Controllers
 {
@@ -16,6 +18,33 @@ namespace MyERP.Services.Identity.Controllers
         {
             _permissionService = permissionService;
         }
+
+
+        [HttpGet("modules")]
+        [Authorize]
+        public async Task<IActionResult> GetAllModules()
+        {
+            var modules = await _permissionService.GetAllModulesAsync();
+            return Ok(ApiResponse<List<ModuleDto>>.Ok(modules));
+        }
+
+        [HttpPost("modules")]
+        [Authorize]
+        public async Task<IActionResult> CreateModule([FromBody] ModuleDto request)
+        {
+            var module = new Module
+            {
+                Id = Guid.NewGuid(),
+                ModuleName = request.ModuleName,
+                ModuleCode = request.ModuleCode,
+                DisplayOrder = request.DisplayOrder,
+                IsActive = true
+            };
+            // Direct save (simple approach)
+            await _permissionService.CreateModuleAsync(module);
+            return Ok(ApiResponse.Ok("Module created successfully"));
+        }
+
 
         [HttpGet("role/{roleId}")]
         [Authorize]

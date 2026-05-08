@@ -12,6 +12,10 @@ namespace MyERP.Services.Identity.DTOs.Users
         public Guid RoleId { get; set; } // GUID
         public string RoleName { get; set; } = string.Empty;
         
+        public Guid? RequestedRoleId { get; set; }
+        public string RequestedRoleName { get; set; } = string.Empty;
+
+        public string Status { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime CreatedAt { get; set; }
     }

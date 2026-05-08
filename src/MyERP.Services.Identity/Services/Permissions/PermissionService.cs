@@ -1,4 +1,5 @@
 using MyERP.Services.Identity.DTOs.Permissions;
+using MyERP.Services.Identity.DTOs.Auth;
 using MyERP.Services.Identity.Models;
 using MyERP.Services.Identity.Repositories;
 using MyERP.Services.Identity.Exceptions;
@@ -14,10 +15,29 @@ namespace MyERP.Services.Identity.Services.Permissions
             _userRepo = userRepo;
         }
 
+        public async Task<List<ModuleDto>> GetAllModulesAsync()
+        {
+            var modules = await _userRepo.GetAllModulesAsync();
+            return modules.Select(m => new ModuleDto
+            {
+                ModuleId = m.Id,
+                ModuleName = m.ModuleName,
+                ModuleCode = m.ModuleCode,
+                DisplayOrder = m.DisplayOrder,
+                HasAccess = true
+            }).ToList();
+        }
+        
+        public async Task CreateModuleAsync(Module module)
+        {
+            // Directly use context through repo or add a new method
+            await _userRepo.CreateModuleAsync(module);
+        }
+
         public async Task<bool> CheckPermissionAsync(string roleName, string endpoint, string httpMethod)
         {
-            // Admin bypass - Admin has access to everything
-            if (roleName.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            // SuperAdmin bypass - has access to everything
+            if (roleName.Equals(SystemConstants.RoleSuperAdmin, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -52,32 +72,16 @@ namespace MyERP.Services.Identity.Services.Permissions
 
         public async Task GrantPermissionAsync(GrantPermissionDto request)
         {
-            // Check if already exists
+            // Check if already exists (even if revoked)
             var existing = await _userRepo.GetPermissionAsync(request.RoleId, request.ModuleId, request.PermissionName);
             if (existing != null)
             {
-                // Update existing
-                existing.IsGranted = request.IsGranted;
+                // Re-activate existing permission
+                existing.IsGranted = true;
                 existing.ApiEndpoint = request.ApiEndpoint;
                 existing.HttpMethod = request.HttpMethod;
-                
-                // Usually we'd update, but I didn't add generic UpdatePermission to Repo yet.
-                // But since RolePermissions are tracked by EF, modifying 'existing' should work if we save changes.
-                // However, I didn't verify saving logic in Repo for generic entity updates if I don't call Update.
-                // Wait, UserRepository.GetPermissionAsync returns tracked entity? Yes, usually.
-                // BUT, I prefer explicit Save.
-                // I'll skip update logic for now and assume Grant = Create if not exists, or Error if exists?
-                // Or maybe I should just Delete and Re-create?
-                // Let's assume Grant is strictly for adding new permission or toggling.
-                // I'll assume standard flow: If exists, throw or update.
-                // Let's implement simpler: If exists, update IsGranted. If not, create.
-                
-                // I need a way to save changes. I'll add UpdatePermissionAsync to repo?
-                // Or I can just use GrantPermissionAsync for Add and Remove for Delete.
-                
-                // Let's use Remove + Add for Update for simplicity if Repo doesn't support Update.
-                // Actually, I'll allow duplicates check and just throw for now to keep it simple as per spec.
-                throw new AppException("Permission already exists. Use update logic or delete first.");
+                await _userRepo.UpdatePermissionAsync(existing);
+                return; // Don't create new if we just updated existing
             }
 
             var permission = new RolePermission

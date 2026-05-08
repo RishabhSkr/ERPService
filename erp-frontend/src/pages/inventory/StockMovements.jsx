@@ -44,19 +44,23 @@ const StockMovements = () => {
             const params = { ...filter };
             if (!params.movementType) delete params.movementType;
             if (!params.itemType) delete params.itemType;
+            // const res = await getStockMovements(params);
+            // // Unwrap: ApiResponse<PagedResponse> → { data: { data: { data: [...], totalRecords } } }
+            // const apiData = res.data?.data || res.data || {};
+            // const pagedData = apiData?.data || apiData;
+            // // PagedResponse has .data (array) and .totalRecords
+            // if (Array.isArray(pagedData)) {
+            //     setMovements(pagedData);
+            //     setTotalRecords(pagedData.length);
+            // } else {
+            //     const items = pagedData?.data || [];
+            //     setMovements(Array.isArray(items) ? items : []);
+            //     setTotalRecords(pagedData?.totalRecords || items.length || 0);
+            // }
             const res = await getStockMovements(params);
-            // Unwrap: ApiResponse<PagedResponse> → { data: { data: { data: [...], totalRecords } } }
-            const apiData = res.data?.data || res.data || {};
-            const pagedData = apiData?.data || apiData;
-            // PagedResponse has .data (array) and .totalRecords
-            if (Array.isArray(pagedData)) {
-                setMovements(pagedData);
-                setTotalRecords(pagedData.length);
-            } else {
-                const items = pagedData?.data || [];
-                setMovements(Array.isArray(items) ? items : []);
-                setTotalRecords(pagedData?.totalRecords || items.length || 0);
-            }
+            const paged = res.data?.data;
+            setMovements(Array.isArray(paged?.data) ? paged.data : []);
+            setTotalRecords(paged?.totalRecords || 0);
         } catch (err) {
             console.error('Stock movements error:', err);
             setMovements([]);

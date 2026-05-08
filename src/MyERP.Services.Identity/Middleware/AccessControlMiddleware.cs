@@ -71,8 +71,8 @@ namespace MyERP.Services.Identity.Middleware
                 return;
             }
 
-            // 4. Admin Bypass
-            if (user.Role?.RoleName == "Admin")
+            // 4. SuperAdmin Bypass — full access to everything
+            if (user.Role?.RoleName == SystemConstants.RoleSuperAdmin)
             {
                 await _next(context);
                 return;

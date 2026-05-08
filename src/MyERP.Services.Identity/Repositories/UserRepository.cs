@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyERP.Services.Identity.Data;
 using MyERP.Services.Identity.Models;
 using MyERP.Services.Identity.DTOs.Auth;
+using MyERP.Services.Identity.DTOs.Roles;
 
 namespace MyERP.Services.Identity.Repositories
 {
@@ -20,6 +21,12 @@ namespace MyERP.Services.Identity.Repositories
                 .FirstOrDefaultAsync(u => u.Username == username);
         }
         
+        public async Task CreateModuleAsync(Module module)
+        {
+            await _context.Modules.AddAsync(module);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<List<ModuleDto>> GetAccessibleModulesAsync(Guid roleId)
         {
             // Ye complex query hai jo RolePermissions se Modules nikalegi
@@ -169,7 +176,7 @@ namespace MyERP.Services.Identity.Repositories
         {
             return await _context.RolePermissions
                 .Include(rp => rp.Module)
-                .Where(rp => rp.RoleId == roleId && rp.IsGranted) // Only Granted
+                .Where(rp => rp.RoleId == roleId) // All permissions (granted + revoked)
                 .ToListAsync();
         }
 
@@ -208,9 +215,40 @@ namespace MyERP.Services.Identity.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task UpdatePermissionAsync(RolePermission permission)
+        {
+            _context.RolePermissions.Update(permission);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<List<Module>> GetAllModulesAsync()
         {
             return await _context.Modules.ToListAsync();
+        }
+
+        public async Task ApproveUserAsync(Guid userId,Guid roleId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+
+            if(user != null ){
+                user.Status = SystemConstants.StatusActive;
+                user.RoleId = roleId;
+                _context.Users.Update(user);
+                await _context.SaveChangesAsync();
+            }
+           
+        }
+
+        public async Task SuspendUserAsync(Guid userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user != null)
+            {
+                user.Status = SystemConstants.StatusSuspended; 
+                user.IsActive = false;
+                _context.Users.Update(user);
+                await _context.SaveChangesAsync();
+            }
         }
 
         public async Task<bool> HasPermissionAsync(Guid roleId, string path, string method)
@@ -236,6 +274,5 @@ namespace MyERP.Services.Identity.Repositories
             }
             return false;
         }
-
     }
 }

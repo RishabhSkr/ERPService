@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 
-namespace MyERP.Services.Sales.Authorization;
+namespace MyERP.Services.Inventory.Authorization;
 
 public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
 {

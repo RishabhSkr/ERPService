@@ -1,4 +1,5 @@
 using MyERP.Services.Identity.DTOs.Auth;
+using MyERP.Services.Identity.DTOs.Roles;
 using MyERP.Services.Identity.Models;
 
 namespace MyERP.Services.Identity.Repositories
@@ -34,7 +35,11 @@ namespace MyERP.Services.Identity.Repositories
         Task<RolePermission?> GetPermissionByIdAsync(Guid rolePermissionId);
         Task GrantPermissionAsync(RolePermission permission);
         Task RemovePermissionAsync(RolePermission permission);
+        Task UpdatePermissionAsync(RolePermission permission);
         Task<List<Module>> GetAllModulesAsync();
+        Task ApproveUserAsync(Guid userId, Guid roleId);
+        Task SuspendUserAsync(Guid userId);
+        Task CreateModuleAsync(Module module);
 
         // Refresh Token Methods (New)
         Task SaveRefreshTokenAsync(RefreshToken token);

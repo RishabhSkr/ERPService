@@ -46,6 +46,7 @@ namespace MyERP.Services.Identity.Data
             {
                 entity.HasKey(e => e.Id); 
                 entity.Property(e => e.Username).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue(SystemConstants.StatusPending);
                 entity.HasIndex(e => e.Username).IsUnique();
                 entity.HasIndex(e => e.Email).IsUnique();
 
@@ -90,33 +91,28 @@ namespace MyERP.Services.Identity.Data
 
         private void SeedData(ModelBuilder modelBuilder)
         {
-            // Static GUIDs taaki har baar same rahein
-            var adminRoleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-            var salesRoleId = Guid.Parse("22222222-2222-2222-2222-222222222222");
-            
-            var modSalesId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-            var modProdId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+            // ═══════════════════════════════════════════════════════════
+            // SEED DATA — Absolute minimum to bootstrap the system
+            // Everything else (Roles, Modules, Permissions) is created
+            // by SuperAdmin through the Settings UI at runtime
+            // ═══════════════════════════════════════════════════════════
 
-            // 1. Roles
+            // 1. System Roles ONLY (cannot be deleted via API)
             modelBuilder.Entity<Role>().HasData(
-                new Role { Id = adminRoleId, RoleName = "Admin", Description = "God Mode", IsActive = true },
-                new Role { Id = salesRoleId, RoleName = "SalesUser", Description = "Sales Team", IsActive = true }
+                new Role { Id = SystemConstants.SuperAdminRoleId, RoleName = SystemConstants.RoleSuperAdmin, Description = "God Mode — undeletable system role", IsActive = true, IsSystemRole = true },
+                new Role { Id = SystemConstants.PendingRoleId, RoleName = SystemConstants.RolePending, Description = "Awaiting admin approval — no access", IsActive = true, IsSystemRole = true }
             );
 
-            // 2. Modules
-            modelBuilder.Entity<Module>().HasData(
-                new Module { Id = modSalesId, ModuleName = "Sales", ModuleCode = "SALES", DisplayOrder = 1, IsActive = true },
-                new Module { Id = modProdId, ModuleName = "Production", ModuleCode = "PROD", DisplayOrder = 2, IsActive = true }
-            );
-
-            // 3. Admin User (Password: Admin@123)
+            // 2. SuperAdmin User (Password: Admin@123)
+            // This is the ONLY user that can bootstrap the system
             modelBuilder.Entity<User>().HasData(new User
             {
-                Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
+                Id = SystemConstants.SuperAdminUserId,
                 Username = "admin",
                 Email = "admin@myerp.com",
                 PasswordHash = "$2a$11$pGW6fhGlCDRZ/BxSmsQagew/WRoFmX5eHPSVXml7dYtux6o.5LluC", // Admin@123 
-                RoleId = adminRoleId,
+                RoleId = SystemConstants.SuperAdminRoleId,
+                Status = SystemConstants.StatusActive,
                 IsActive = true,
                 CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             });

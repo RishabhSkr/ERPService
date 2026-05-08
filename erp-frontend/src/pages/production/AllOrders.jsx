@@ -9,6 +9,9 @@ const Production = () => {
     const [orders, setOrders] = useState([]);
     const [filterId, setFilterId] = useState('');
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const[currentPage,setCurrentPage] = useState(1);
+    const pageSize = 10;
+
     // hook API Calls
     const { loading: isLoading, requestHandlerFunction } = useApi();
 
@@ -124,7 +127,7 @@ const Production = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredOrders.map((order) => (
+                                filteredOrders.slice((currentPage -1 ) * pageSize,currentPage * pageSize).map((order) => (
                                     <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                                         {/* PO# + SO link */}
                                         <td className="px-5 py-3">
@@ -208,6 +211,24 @@ const Production = () => {
                             )}
                         </tbody>
                     </table>
+                    {/* pagination */}
+                    {orders.length > pageSize && (
+                        <div className="flex items-center justify-center gap-3 mt-4">
+                            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage <= 1}
+                                className="px-3 py-1.5 rounded bg-slate-100 text-sm disabled:opacity-40">
+                                ← Prev
+                            </button>
+                            <span className="text-sm text-slate-500">
+                                Page {currentPage} of {Math.ceil(orders.length / pageSize)}
+                            </span>
+                            <button onClick={() => setCurrentPage(p => p + 1)}
+                                disabled={currentPage >= Math.ceil(orders.length / pageSize)}
+                                className="px-3 py-1.5 rounded bg-slate-100 text-sm disabled:opacity-40">
+                                Next →
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

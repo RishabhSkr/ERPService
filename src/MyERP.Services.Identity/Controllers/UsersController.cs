@@ -55,5 +55,26 @@ namespace MyERP.Services.Identity.Controllers
             await _userService.DeleteUserAsync(id);
             return Ok(ApiResponse.Ok("User deleted successfully"));
         }
+
+
+        [HttpPut("{id}/approve")]
+        [Authorize]
+        public async Task<IActionResult> ApproveUser(Guid id,[FromBody] ApproveRequestDto request){
+            await _userService.ApproveUserAsync(id, request.RoleId);
+            return Ok(ApiResponse.Ok("User Role approved successfully"));
+        }
+
+        [HttpPut("{id}/suspend")]
+        [Authorize]
+        public async Task<IActionResult> SuspendUser(Guid id){
+            await _userService.SuspendUserAsync(id);
+            return Ok(ApiResponse.Ok("User suspended successfully"));
+        }
     }
+}
+
+
+public class ApproveRequestDto
+{
+    public Guid RoleId { get; set; }
 }
