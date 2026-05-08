@@ -40,9 +40,11 @@ const createApiInstance = (baseURL, serviceName) => {
 };
 
 // Service instances
-export const salesApi = createApiInstance('http://localhost:5000/api', 'Sales');
-export const productionApi = createApiInstance('http://localhost:5000/api', 'Production');
-export const inventoryApi = createApiInstance('http://localhost:5000/api', 'Inventory');
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+export const salesApi = createApiInstance(API_BASE_URL, 'Sales');
+export const productionApi = createApiInstance(API_BASE_URL, 'Production');
+export const inventoryApi = createApiInstance(API_BASE_URL, 'Inventory');
 
 // Default export (backward compatibility — points to Production for now)
 export default productionApi;
