@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authorization;
 using MyERP.Services.Sales.Events.Consumers;
 using MassTransit;
 using MyERP.Services.Sales.Events.Producers.Publishers.MassTransit;
+using MyERP.Services.Sales.HttpHandlers;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -80,11 +81,12 @@ builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 
 // 8. Register HTTP Client for Inventory Service
 var inventoryServiceUrl = builder.Configuration["Services:InventoryServiceUrl"] ?? "http://localhost:5004";
+builder.Services.AddTransient<JwtDelegatingHandler>();
 builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
 {
     client.BaseAddress = new Uri(inventoryServiceUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+}).AddHttpMessageHandler<JwtDelegatingHandler>();
 
 
 // 9. Register Event Publisher (MassTransit)
@@ -130,6 +132,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// 🐳 Auto Migration
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SalesDbContext>();
+    db.Database.Migrate();
+}
+
 // Configure pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -143,7 +152,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Set port to 5002
-app.Urls.Add("http://localhost:5002");
+// Local dev mein custom port, Docker mein default 8080 use hota hai
+if (app.Environment.IsDevelopment())
+{
+    app.Urls.Add("http://localhost:5002");
+}
 
 app.Run();

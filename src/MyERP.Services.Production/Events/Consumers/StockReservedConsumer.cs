@@ -57,7 +57,7 @@ namespace MyERP.Services.Production.Events.Consumers
         }
 
         /// <summary>
-        /// 🆕 WO-level: Update WorkOrder reservation status
+        /// 🆕 WO-level: Update WorkOrder reservation status + aggregate to PO
         /// </summary>
         private async Task HandleWorkOrderReservation(StockReservedEvent @event)
         {
@@ -85,8 +85,28 @@ namespace MyERP.Services.Production.Events.Consumers
                 wo.ReservationStatus = ReservationStatus.Reserved;
                 wo.UpdatedAt = DateTime.UtcNow;
 
+                // ─── UPDATE PO MaterialRequirements.QuantityReserved ───
+                var po = await _context.ProductionOrders
+                    .Include(o => o.MaterialRequirements)
+                    .FirstOrDefaultAsync(o => o.Id == wo.ProductionOrderId);
+
+                if (po != null)
+                {
+                    foreach (var reserved in @event.ReservedMaterials)
+                    {
+                        var matReq = po.MaterialRequirements
+                            .FirstOrDefault(r => r.RawMaterialId == reserved.RawMaterialId);
+                        if (matReq != null)
+                        {
+                            matReq.QuantityReserved += reserved.QuantityReserved;
+                            matReq.Status = matReq.QuantityReserved >= matReq.QuantityRequired
+                                ? "Reserved" : "PartiallyReserved";
+                        }
+                    }
+                }
+
                 _logger.LogInformation(
-                    "✅ WO {WONumber} — materials reserved, ready to activate",
+                    "✅ WO {WONumber} — materials reserved, PO MaterialRequirements updated",
                     wo.WorkOrderNumber);
             }
             else
@@ -98,6 +118,51 @@ namespace MyERP.Services.Production.Events.Consumers
                 _logger.LogWarning(
                     "❌ Reservation failed for WO {WONumber}: {Reason}",
                     wo.WorkOrderNumber, @event.FailureReason);
+            }
+
+            // ─── AGGREGATE: Update PO ReservationStatus from all WOs ───
+            await AggregatePOReservationStatus(wo.ProductionOrderId);
+        }
+
+        /// <summary>
+        /// Aggregate all WO reservation statuses → update PO ReservationStatus
+        /// </summary>
+        private async Task AggregatePOReservationStatus(Guid productionOrderId)
+        {
+            var po = await _context.ProductionOrders
+                .FirstOrDefaultAsync(o => o.Id == productionOrderId);
+
+            if (po == null) return;
+
+            var allWOs = await _context.WorkOrders
+                .Where(w => w.ProductionOrderId == productionOrderId
+                         && w.Status != WorkOrderStatus.Cancelled)
+                .ToListAsync();
+
+            if (!allWOs.Any()) return;
+
+            var allReserved = allWOs.All(w => w.ReservationStatus == ReservationStatus.Reserved);
+            var anyFailed = allWOs.Any(w => w.ReservationStatus == ReservationStatus.Failed);
+            var anyReserved = allWOs.Any(w => w.ReservationStatus == ReservationStatus.Reserved);
+
+            string newStatus;
+            if (allReserved)
+                newStatus = ReservationStatus.Reserved;
+            else if (anyFailed)
+                newStatus = ReservationStatus.Failed;
+            else if (anyReserved)
+                newStatus = ReservationStatus.Partial;
+            else
+                newStatus = ReservationStatus.Pending;
+
+            if (po.ReservationStatus != newStatus)
+            {
+                po.ReservationStatus = newStatus;
+                po.UpdatedAt = DateTime.UtcNow;
+
+                _logger.LogInformation(
+                    "📊 PO {OrderNumber} ReservationStatus → {Status} (from {WOCount} WOs)",
+                    po.OrderNumber, newStatus, allWOs.Count);
             }
         }
 

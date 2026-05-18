@@ -1,0 +1,15 @@
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.nupkg
+.vs/
+.git/
+.gitignore
+*.user
+*.suo
+*.tmp
+*.log
+*.md
+*.postman_collection.json

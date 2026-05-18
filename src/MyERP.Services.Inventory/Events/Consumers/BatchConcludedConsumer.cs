@@ -38,8 +38,9 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
     {
         var @event = context.Message;
         _logger.LogInformation(
-            "Received batch concluded — PO: {PONumber}, WO: {WONumber}",
-            @event.ProductionOrderNumber, @event.WorkOrderNumber ?? "N/A (PO-level)");
+            "📦 Received batch concluded — PO: {PONumber}, WO: {WONumber}, ProductId: {ProductId}, QtyGood: {Qty}",
+            @event.ProductionOrderNumber, @event.WorkOrderNumber ?? "N/A (PO-level)",
+            @event.ProductId, @event.QuantityGood);
 
         // ─── Idempotency: check by WorkOrderId if WO-level, else by PO ───
         var alreadyProcessed = @event.WorkOrderId.HasValue
@@ -54,7 +55,7 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
 
         if (alreadyProcessed)
         {
-            _logger.LogWarning("Batch already processed for {Target} — skipping",
+            _logger.LogWarning("⏭️ Batch already processed for {Target} — skipping",
                 @event.WorkOrderNumber ?? @event.ProductionOrderNumber);
             return;
         }
@@ -79,7 +80,33 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                                             && sm.WorkOrderId == null
                                             && sm.MovementType == MovementType.RESERVE);
 
+            // Get the storage location from reservation record
+            // FromLocationId may be null for old RESERVE records (before fix)
             var storageLocationId = reservation?.FromLocationId ?? Guid.Empty;
+
+            // Fallback: if reservation exists but FromLocationId is null, find the raw material's location
+            if (storageLocationId == Guid.Empty && reservation != null)
+            {
+                var rawMat = await _context.RawMaterials.FindAsync(material.RawMaterialId);
+                if (rawMat?.DefaultStorageLocationId != null)
+                    storageLocationId = rawMat.DefaultStorageLocationId.Value;
+            }
+
+            // Last fallback: find ANY inventory location for this raw material
+            if (storageLocationId == Guid.Empty)
+            {
+                var inv = await _context.RawMaterialInventories
+                    .FirstOrDefaultAsync(i => i.RawMaterialId == material.RawMaterialId && i.CurrentStock > 0);
+                if (inv != null)
+                    storageLocationId = inv.StorageLocationId;
+            }
+
+            if (storageLocationId == Guid.Empty)
+            {
+                _logger.LogWarning("⚠️ No storage location found for material {MaterialCode} — skipping consumption",
+                    material.MaterialCode);
+                continue;
+            }
 
             // A: Release reservation (ReservedStock -= consumed)
             if (reservation != null)
@@ -147,6 +174,10 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
         {
             var targetLocationId = await GetTargetStorageLocationId(@event.ProductId);
 
+            _logger.LogInformation(
+                "📍 Finished goods location lookup: ProductId={ProductId}, LocationId={LocationId}",
+                @event.ProductId, targetLocationId);
+
             if (targetLocationId != Guid.Empty)
             {
                 await _stockMovementService.RecordMovementAsync(new RecordStockMovementDto
@@ -164,9 +195,20 @@ public class BatchConcludedConsumer : IConsumer<BatchConcludedEvent>
                     CreatedBy     = SystemUser.Id
                 });
 
-                _logger.LogInformation("Added {Qty} finished goods of {ProductCode} for {Target} to Location {LocId}",
+                _logger.LogInformation("✅ Added {Qty} finished goods of {ProductCode} for {Target} to Location {LocId}",
                     @event.QuantityGood, @event.ProductCode, targetLabel, targetLocationId);
             }
+            else
+            {
+                _logger.LogError(
+                    "❌ SKIPPED finished goods! No storage location found for ProductId={ProductId}. " +
+                    "Product needs DefaultStorageLocationId or a System warehouse must exist.",
+                    @event.ProductId);
+            }
+        }
+        else
+        {
+            _logger.LogWarning("⚠️ QuantityGood is 0 for {Target} — no finished goods to add", targetLabel);
         }
 
         // ─── Step 3: Handle product scrap ───

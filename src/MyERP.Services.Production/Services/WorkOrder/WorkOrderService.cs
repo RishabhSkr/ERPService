@@ -58,9 +58,9 @@ namespace MyERP.Services.Production.Services.WorkOrder
             if (po.Status == ProductionOrderStatus.Cancelled)
                 throw new AppException("Cannot create WO for cancelled Production Order");
 
-            // Guard 2: PO must be Released or InProgress
-            if (po.Status != ProductionOrderStatus.Released && po.Status != ProductionOrderStatus.InProgress)
-                throw new AppException($"PO must be Released or InProgress. Current: '{po.Status}'");
+            // Guard 2: PO must be InProgress (user must click Start first)
+            if (po.Status != ProductionOrderStatus.InProgress)
+                throw new AppException($"Cannot create Work Order — PO must be started first. Current status: '{po.Status}'");
 
             // Guard 3: ProcessRouteStep exists
             var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
@@ -84,11 +84,12 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
             // Guard 6: Qty ≤ RemainingQty (HybridSum check)
             var hybridSum = await _repository.GetHybridSumForStepAsync(dto.ProductionOrderId, dto.ProcessRouteStepId);
-            var remaining = po.QuantityPlanned - hybridSum;
+            var targetQtyForPO = po.QuantityPlanned * step.OutputMultiplier;
+            var remaining = targetQtyForPO - hybridSum;
             if (dto.QuantityPlanned > remaining)
                 throw new AppException(
-                    $"Quantity {dto.QuantityPlanned} exceeds remaining quantity ({remaining}) for this step. " +
-                    $"PO total: {po.QuantityPlanned}, already planned/completed: {hybridSum}");
+                    $"Quantity {dto.QuantityPlanned} exceeds remaining quantity ({remaining} {step.OutputUnit}) for this step. " +
+                    $"Total target: {targetQtyForPO} {step.OutputUnit}, already planned/completed: {hybridSum}");
 
             // ---- CREATE WO ----
             var counter = await _repository.GetCountAsync();
@@ -232,30 +233,90 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 var po = await _poRepository.GetByIdWithDetailsAsync(wo.ProductionOrderId);
                 if (po != null)
                 {
-                    var returnEvent = new MaterialReturnRequestedEvent
+                    // 1. Get BOM lines mapped to this process
+                    var bom = await _bomRepository.GetByIdWithLinesAsync(po.BOMId);
+                    if (bom != null)
                     {
-                        ProductionOrderId = po.Id,
-                        ProductionOrderNumber = po.OrderNumber,
-                        WorkOrderId = wo.WorkOrderId,
-                        WorkOrderNumber = wo.WorkOrderNumber,
-                        MaterialsConsumed = po.MaterialRequirements.Select(m => new MaterialConsumed
+                        var processMaterialIds = bom.Lines
+                            .Where(l => l.ProcessId == wo.ProcessId)
+                            .Select(l => l.RawMaterialId)
+                            .ToList();
+
+                        var routeStep = wo.ProcessRouteStep;
+                        if (routeStep == null && wo.ProcessRouteStepId.HasValue)
                         {
-                            RawMaterialId = m.RawMaterialId,
-                            MaterialCode = m.MaterialCode,
-                            QuantityConsumed = 0,
-                            QuantityReturned = po.QuantityPlanned > 0
-                                ? (m.QuantityRequired / po.QuantityPlanned) * wo.QuantityPlanned
-                                : 0,
-                            Unit = m.Unit
-                        }).ToList()
-                    };
-                    await _eventPublisher.PublishAsync(returnEvent);
+                            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
+                            routeStep = route?.Steps.FirstOrDefault(s => s.ProcessRouteStepId == wo.ProcessRouteStepId);
+                        }
+                        var outputMultiplier = routeStep?.OutputMultiplier ?? 1.0m;
+                        var targetQtyForPO = po.QuantityPlanned * outputMultiplier;
+
+                        var returnEvent = new MaterialReturnRequestedEvent
+                        {
+                            ProductionOrderId = po.Id,
+                            ProductionOrderNumber = po.OrderNumber,
+                            WorkOrderId = wo.WorkOrderId,
+                            WorkOrderNumber = wo.WorkOrderNumber,
+                            MaterialsConsumed = po.MaterialRequirements
+                                .Where(m => processMaterialIds.Contains(m.RawMaterialId))
+                                .Select(m => new MaterialConsumed
+                                {
+                                    RawMaterialId = m.RawMaterialId,
+                                    MaterialCode = m.MaterialCode,
+                                    QuantityConsumed = 0,
+                                    QuantityReturned = targetQtyForPO > 0
+                                        ? (m.QuantityRequired / targetQtyForPO) * wo.QuantityPlanned
+                                        : 0,
+                                    Unit = m.Unit
+                                }).ToList()
+                        };
+                        await _eventPublisher.PublishAsync(returnEvent);
+                    }
                 }
 
                 _logger.LogInformation("WO {WONumber} cancelled — materials returned", wo.WorkOrderNumber);
             }
 
             _logger.LogInformation("Cancelled WO {WONumber}: {Reason}", wo.WorkOrderNumber, reason);
+        }
+
+        // ====================================================================
+        // FORCE COMPLETE WO — manual close at current quantities
+        // ====================================================================
+        public async Task ForceCompleteAsync(Guid workOrderId)
+        {
+            var wo = await _repository.GetByIdWithExecutionsAsync(workOrderId);
+            if (wo == null)
+                throw new NotFoundException("WorkOrder", workOrderId);
+
+            if (wo.Status == WorkOrderStatus.Completed)
+                throw new AppException("Work Order is already completed");
+
+            if (wo.Status != WorkOrderStatus.InProgress)
+                throw new AppException($"Can only force-complete InProgress Work Orders. Current: '{wo.Status}'");
+
+            // Deactivate any active executions
+            foreach (var activeExec in wo.Executions.Where(e => e.Status == ExecutionStatus.Active))
+            {
+                activeExec.Status = ExecutionStatus.Completed;
+                activeExec.DeactivatedAt = DateTime.UtcNow;
+                activeExec.Notes = (string.IsNullOrEmpty(activeExec.Notes) ? "" : activeExec.Notes + " | ") + "Force-completed by user.";
+                await _repository.UpdateExecutionAsync(activeExec);
+            }
+
+            wo.Status = WorkOrderStatus.Completed;
+            wo.ActualEndDate = DateTime.UtcNow;
+            wo.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(wo);
+
+            _logger.LogInformation("WO {WONumber} force-completed: Good={Good}, Scrap={Scrap}, Planned={Planned}",
+                wo.WorkOrderNumber, wo.QuantityCompleted, wo.QuantityScrap, wo.QuantityPlanned);
+
+            // Publish completion event → inventory consumes materials, returns unused, adds finished goods
+            await PublishWoCompletionEvent(wo);
+
+            // Check if PO can auto-complete
+            await TryAutoCompletePO(wo.ProductionOrderId);
         }
 
         // ====================================================================
@@ -296,18 +357,18 @@ namespace MyERP.Services.Production.Services.WorkOrder
                     var hybridSum = notCancelled.Sum(w =>
                         w.Status == WorkOrderStatus.Completed ? w.QuantityCompleted : w.QuantityPlanned);
 
-                    var unplanned = Math.Max(0, po.QuantityPlanned - hybridSum);
-                    var progress = po.QuantityPlanned > 0
-                        ? Math.Round(completed / po.QuantityPlanned * 100, 1) : 0;
+                    var targetQty = po.QuantityPlanned * step.OutputMultiplier;
+                    var unplanned = Math.Max(0, targetQty - hybridSum);
+                    var progress = targetQty > 0
+                        ? Math.Round(completed / targetQty * 100, 1) : 0;
 
                     var pipeline = notCancelled
                         .Where(w => w.Status != WorkOrderStatus.Completed)
                         .Sum(w => w.QuantityPlanned);
 
                     string displayStatus;
-                    if (completed > 0 && completed >= po.QuantityPlanned) displayStatus = "Done";
+                    if (completed > 0 && completed >= targetQty) displayStatus = "Done";
                     else if (completed > 0) displayStatus = "In Progress";
-                    // if (pipeline > 0 && completed == 0) displayStatus = "Planned";
                     else if (pipeline > 0) displayStatus = "Planned";
                     else displayStatus = "New";
 
@@ -317,6 +378,9 @@ namespace MyERP.Services.Production.Services.WorkOrder
                         StepNumber = step.StepNumber,
                         ProcessCode = step.Process?.ProcessCode,
                         ProcessName = step.Process?.ProcessName ?? "Unknown",
+                        OutputMultiplier = step.OutputMultiplier,
+                        OutputUnit = step.OutputUnit,
+                        TargetQuantity = targetQty,
                         TotalPlanned = hybridSum,
                         TotalCompleted = completed,
                         UnplannedQuantity = unplanned,
@@ -361,7 +425,8 @@ namespace MyERP.Services.Production.Services.WorkOrder
             foreach (var step in route.Steps.OrderBy(s => s.StepNumber))
             {
                 var hybridSum = await _repository.GetHybridSumForStepAsync(productionOrderId, step.ProcessRouteStepId);
-                var remaining = Math.Max(0, po.QuantityPlanned - hybridSum);
+                var targetQty = po.QuantityPlanned * step.OutputMultiplier;
+                var remaining = Math.Max(0, targetQty - hybridSum);
 
                 // Get equipment that can perform this process
                 var equipment = await _equipmentRepository.GetByProcessIdAsync(step.ProcessId);
@@ -385,6 +450,7 @@ namespace MyERP.Services.Production.Services.WorkOrder
                         WorkOrderNumber = w.WorkOrderNumber,
                         QuantityPlanned = w.QuantityPlanned,
                         QuantityCompleted = w.QuantityCompleted,
+                        OutputUnit = step.OutputUnit,
                         Status = w.Status,
                         WorkCenterCode = w.WorkCenter?.CenterCode
                     }).ToList();
@@ -395,6 +461,9 @@ namespace MyERP.Services.Production.Services.WorkOrder
                     StepNumber = step.StepNumber,
                     ProcessCode = step.Process?.ProcessCode,
                     ProcessName = step.Process?.ProcessName ?? "Unknown",
+                    OutputMultiplier = step.OutputMultiplier,
+                    OutputUnit = step.OutputUnit,
+                    TargetQuantity = targetQty,
                     RemainingQuantity = remaining,
                     SetupTimeMinutes = step.SetupTimeMinutes,
                     RunTimePerUnitMinutes = step.RunTimePerUnitMinutes,
@@ -451,7 +520,7 @@ namespace MyERP.Services.Production.Services.WorkOrder
                     RouteVersion = route.Version,
                     ProductCode = po.ProductCode,
                     ProductName = po.ProductName,
-                    QuantityPlanned = po.QuantityPlanned,
+                    QuantityPlanned = productionOrderId != Guid.Empty ? po.QuantityPlanned * step.OutputMultiplier : 0,
                     Status = WorkOrderStatus.Pending
                 });
             }
@@ -482,6 +551,13 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
             if (wo.Status == WorkOrderStatus.Completed)
                 throw new AppException("Cannot activate completed work order");
+
+            // Prevent multiple active executions for the same equipment
+            var existingExecutions = await _repository.GetExecutionsByWorkOrderAsync(workOrderId);
+            if (existingExecutions.Any(e => e.EquipmentId == dto.EquipmentId && e.Status == ExecutionStatus.Active))
+            {
+                throw new AppException($"Equipment is already active for this work order.");
+            }
 
             // Must be Released with materials reserved
             if (wo.Status == WorkOrderStatus.Released && wo.ReservationStatus != ReservationStatus.Reserved)
@@ -570,13 +646,23 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 wo.QuantityCompleted = wo.Executions.Sum(e => e.QuantityProduced);
                 wo.QuantityScrap = wo.Executions.Sum(e => e.QuantityScrap);
 
-                var hasActive = wo.Executions.Any(e => e.Status == ExecutionStatus.Active);
-                if (!hasActive && wo.QuantityCompleted >= wo.QuantityPlanned)
+                // Auto-complete when total output (good + scrap) >= planned
+                var totalOutput = wo.QuantityCompleted + wo.QuantityScrap;
+                if (totalOutput >= wo.QuantityPlanned)
                 {
                     wo.Status = WorkOrderStatus.Completed;
                     wo.ActualEndDate = DateTime.UtcNow;
-                    _logger.LogInformation("WO {WO} auto-completed: {Qty}/{Planned}",
-                        wo.WorkOrderNumber, wo.QuantityCompleted, wo.QuantityPlanned);
+                    _logger.LogInformation("WO {WO} auto-completed: Good={Good}, Scrap={Scrap}, Total={Total}/{Planned}",
+                        wo.WorkOrderNumber, wo.QuantityCompleted, wo.QuantityScrap, totalOutput, wo.QuantityPlanned);
+
+                    // Auto-deactivate any lingering active executions
+                    foreach (var activeExec in wo.Executions.Where(e => e.Status == ExecutionStatus.Active))
+                    {
+                        activeExec.Status = ExecutionStatus.Completed;
+                        activeExec.DeactivatedAt = DateTime.UtcNow;
+                        activeExec.Notes = (string.IsNullOrEmpty(activeExec.Notes) ? "" : activeExec.Notes + " | ") + "Auto-deactivated: Target quantity reached.";
+                        await _repository.UpdateExecutionAsync(activeExec);
+                    }
 
                     // Notify Inventory: consume materials + add finished goods + handle scrap
                     await PublishWoCompletionEvent(wo);
@@ -695,17 +781,40 @@ namespace MyERP.Services.Production.Services.WorkOrder
             var po = await _poRepository.GetByIdWithDetailsAsync(wo.ProductionOrderId);
             if (po == null) return;
 
-            // Calculate proportional materials
-            var materials = po.MaterialRequirements.Select(m => new MaterialToReserve
+            // 1. Get BOM lines mapped to this process
+            var bom = await _bomRepository.GetByIdWithLinesAsync(po.BOMId);
+            if (bom == null) return;
+            
+            var processMaterialIds = bom.Lines
+                .Where(l => l.ProcessId == wo.ProcessId)
+                .Select(l => l.RawMaterialId)
+                .ToList();
+
+            // Calculate total expected quantity for this WO step
+            var routeStep = wo.ProcessRouteStep; // Assume it's loaded, but let's fetch if null
+            if (routeStep == null && wo.ProcessRouteStepId.HasValue)
             {
-                RawMaterialId = m.RawMaterialId,
-                MaterialCode = m.MaterialCode,
-                // Proportional: (material per unit) × WO qty
-                Quantity = po.QuantityPlanned > 0
-                    ? (m.QuantityRequired / po.QuantityPlanned) * wo.QuantityPlanned
-                    : 0,
-                Unit = m.Unit
-            }).ToList();
+                var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
+                routeStep = route?.Steps.FirstOrDefault(s => s.ProcessRouteStepId == wo.ProcessRouteStepId);
+            }
+            var outputMultiplier = routeStep?.OutputMultiplier ?? 1.0m;
+
+            // Target quantity for the entire PO for this specific step
+            var targetQtyForPO = po.QuantityPlanned * outputMultiplier;
+
+            // Proportion: WO quantity / Total target quantity
+            var proportion = targetQtyForPO > 0 ? wo.QuantityPlanned / targetQtyForPO : 0;
+
+            // Calculate proportional materials ONLY for this process
+            var materials = po.MaterialRequirements
+                .Where(m => processMaterialIds.Contains(m.RawMaterialId))
+                .Select(m => new MaterialToReserve
+                {
+                    RawMaterialId = m.RawMaterialId,
+                    MaterialCode = m.MaterialCode,
+                    Quantity = m.QuantityRequired * proportion,
+                    Unit = m.Unit
+                }).ToList();
 
             var reservationEvent = new MaterialReservationRequestedEvent
             {
@@ -740,8 +849,59 @@ namespace MyERP.Services.Production.Services.WorkOrder
             var po = await _poRepository.GetByIdWithDetailsAsync(wo.ProductionOrderId);
             if (po == null) return;
 
+            // 1. Get BOM lines mapped to this process
+            var bom = await _bomRepository.GetByIdWithLinesAsync(po.BOMId);
+            if (bom == null) return;
+            
+            var processMaterialIds = bom.Lines
+                .Where(l => l.ProcessId == wo.ProcessId)
+                .Select(l => l.RawMaterialId)
+                .ToList();
+
             // Total produced = good + scrap (both use raw material)
             var totalProduced = wo.QuantityCompleted + wo.QuantityScrap;
+
+            // ─── Determine if this WO is for the LAST step (only last step produces finished goods) ───
+            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
+
+            // Get THIS WO's step multiplier for material consumption calculation
+            var currentStep = route?.Steps.FirstOrDefault(s => s.ProcessRouteStepId == wo.ProcessRouteStepId);
+            var outputMultiplier = currentStep?.OutputMultiplier ?? 1.0m;
+            var targetQtyForPO = po.QuantityPlanned * outputMultiplier;
+            var isLastStep = false;
+            decimal finishedGoodQty = 0;
+            decimal finishedScrapQty = 0;
+
+            if (route != null && route.Steps.Any())
+            {
+                var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).First();
+                isLastStep = (wo.ProcessRouteStepId == lastStep.ProcessRouteStepId);
+
+                if (isLastStep)
+                {
+                    // Last step: divide by multiplier to get product units
+                    var mult = lastStep.OutputMultiplier > 0 ? lastStep.OutputMultiplier : 1;
+                    finishedGoodQty = Math.Round(wo.QuantityCompleted / mult, 2);
+                    finishedScrapQty = Math.Round(wo.QuantityScrap / mult, 2);
+
+                    _logger.LogInformation(
+                        "WO {WO} is LAST step #{Step}: WO Good={WoGood}, Multiplier={Mult} → Product qty={ProductQty}",
+                        wo.WorkOrderNumber, lastStep.StepNumber, wo.QuantityCompleted, mult, finishedGoodQty);
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "WO {WO} is intermediate step — NO finished goods will be added to inventory",
+                        wo.WorkOrderNumber);
+                }
+            }
+            else
+            {
+                // No route = single step, treat all output as finished goods
+                isLastStep = true;
+                finishedGoodQty = wo.QuantityCompleted;
+                finishedScrapQty = wo.QuantityScrap;
+            }
 
             var completionEvent = new BatchConcludedEvent
             {
@@ -753,20 +913,22 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 SalesOrderNumber = po.SalesOrderNumber,
                 ProductId = po.ProductId,
                 ProductCode = po.ProductCode,
-                QuantityGood = wo.QuantityCompleted,
-                QuantityScrap = wo.QuantityScrap,
-                MaterialsConsumed = po.MaterialRequirements.Select(m =>
+                QuantityGood = finishedGoodQty,    // 0 for intermediate steps!
+                QuantityScrap = finishedScrapQty,
+                MaterialsConsumed = po.MaterialRequirements
+                    .Where(m => processMaterialIds.Contains(m.RawMaterialId)) // ONLY PROCESS MATERIALS
+                    .Select(m =>
                 {
-                    // BOM per unit (includes ScrapPercentage)
-                    var perUnit = po.QuantityPlanned > 0
-                        ? m.QuantityRequired / po.QuantityPlanned
+                    // Total material required for the entire PO / Total expected Target Qty
+                    var materialPerUnitOfOutput = targetQtyForPO > 0
+                        ? m.QuantityRequired / targetQtyForPO
                         : 0;
 
-                    // Consumed = perUnit × total produced (good + scrap)
-                    var consumed = perUnit * totalProduced;
+                    // Consumed = materialPerUnitOfOutput × total produced (good + scrap)
+                    var consumed = materialPerUnitOfOutput * totalProduced;
 
-                    // Reserved for THIS WO = perUnit × WO planned
-                    var reservedForWo = perUnit * wo.QuantityPlanned;
+                    // Reserved for THIS WO = materialPerUnitOfOutput × WO planned
+                    var reservedForWo = materialPerUnitOfOutput * wo.QuantityPlanned;
 
                     // Unused = reserved - consumed → return to warehouse
                     var returned = Math.Max(0, reservedForWo - consumed);
@@ -783,6 +945,25 @@ namespace MyERP.Services.Production.Services.WorkOrder
             };
 
             await _eventPublisher.PublishAsync(completionEvent);
+
+            // ─── UPDATE PO MaterialRequirements.QuantityConsumed ───
+            foreach (var consumed in completionEvent.MaterialsConsumed)
+            {
+                var matReq = po.MaterialRequirements
+                    .FirstOrDefault(m => m.RawMaterialId == consumed.RawMaterialId);
+                if (matReq != null)
+                {
+                    matReq.QuantityConsumed += consumed.QuantityConsumed;
+                    
+                    // Update status based on consumption
+                    if (matReq.QuantityConsumed >= matReq.QuantityRequired)
+                        matReq.Status = "Consumed";
+                    else if (matReq.QuantityConsumed > 0)
+                        matReq.Status = "PartiallyConsumed";
+                }
+            }
+            await _poRepository.UpdateAsync(po);
+
             _logger.LogInformation(
                 "Published WO completion for {WONumber}: Good={Good}, Scrap={Scrap}, Materials={Count}",
                 wo.WorkOrderNumber, wo.QuantityCompleted, wo.QuantityScrap,
@@ -812,13 +993,60 @@ namespace MyERP.Services.Production.Services.WorkOrder
             var allCompleted = nonCancelled.All(w => w.Status == WorkOrderStatus.Completed);
             if (!allCompleted) return;
 
-            // All WOs done → auto-complete PO
-            var po = await _poRepository.GetByIdAsync(productionOrderId);
+            // ─── GUARD: Check all process route steps have WOs ───
+            var po = await _poRepository.GetByIdWithDetailsAsync(productionOrderId);
             if (po == null || po.Status == ProductionOrderStatus.Completed) return;
 
+            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
+            if (route != null && route.Steps.Any())
+            {
+                var requiredStepCount = route.Steps.Count;
+                var coveredProcessIds = nonCancelled
+                    .Select(w => w.ProcessId)
+                    .Distinct()
+                    .ToList();
+
+                if (coveredProcessIds.Count < requiredStepCount)
+                {
+                    _logger.LogInformation(
+                        "PO {PONumber}: {Completed}/{Total} process steps have WOs — NOT auto-completing yet",
+                        po.OrderNumber, coveredProcessIds.Count, requiredStepCount);
+                    return;
+                }
+            }
+
+            // All WOs done + all process steps covered → auto-complete PO
+            // ─── Calculate PO quantities from LAST step (final product output) ───
+            decimal poGood = 0;
+            decimal poScrap = 0;
+
+            if (route != null && route.Steps.Any())
+            {
+                var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).First();
+                var lastStepWOs = nonCancelled
+                    .Where(w => w.ProcessRouteStepId == lastStep.ProcessRouteStepId)
+                    .ToList();
+
+                var multiplier = lastStep.OutputMultiplier > 0 ? lastStep.OutputMultiplier : 1;
+                poGood = Math.Round(lastStepWOs.Sum(w => w.QuantityCompleted) / multiplier, 2);
+                poScrap = Math.Round(lastStepWOs.Sum(w => w.QuantityScrap) / multiplier, 2);
+
+                _logger.LogInformation(
+                    "PO qty from last step #{Step} ({Process}): WO Good={WoGood}, WO Scrap={WoScrap}, Multiplier={Mult} → PO Good={PoGood}, Scrap={PoScrap}",
+                    lastStep.StepNumber, lastStep.Process?.ProcessName,
+                    lastStepWOs.Sum(w => w.QuantityCompleted), lastStepWOs.Sum(w => w.QuantityScrap),
+                    multiplier, poGood, poScrap);
+            }
+            else
+            {
+                // Fallback: no route, just sum all WOs (shouldn't happen normally)
+                poGood = nonCancelled.Sum(w => w.QuantityCompleted);
+                poScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            }
+
             po.Status = ProductionOrderStatus.Completed;
-            po.QuantityGood = nonCancelled.Sum(w => w.QuantityCompleted);
-            po.QuantityScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            po.QuantityGood = poGood;
+            po.QuantityScrap = poScrap;
             po.ActualEndDate = DateTime.UtcNow;
             po.UpdatedAt = DateTime.UtcNow;
 

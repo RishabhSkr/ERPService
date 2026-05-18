@@ -52,6 +52,7 @@ using MyERP.Services.Production.Services.ProcessRoute;
 using MyERP.Services.Production.Services.WorkOrder;
 using MyERP.Services.Production.Authorization;
 using Microsoft.AspNetCore.Authorization;
+using MyERP.Services.Production.HttpHandlers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,11 +64,12 @@ builder.Services.AddDbContext<ProductionDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 var inventoryServiceUrl = builder.Configuration["Services:InventoryServiceUrl"] 
     ?? "http://localhost:5004";
+builder.Services.AddTransient<JwtDelegatingHandler>();
 builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
 {
     client.BaseAddress = new Uri(inventoryServiceUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+}).AddHttpMessageHandler<JwtDelegatingHandler>();
 
 // ============================================================================
 // 2. CONTROLLERS + API DOCUMENTATION
@@ -226,6 +228,13 @@ builder.Services.AddCors(options =>
 // ============================================================================
 var app = builder.Build();
 
+// 🐳 Auto Migration
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ProductionDbContext>();
+    db.Database.Migrate();
+}
+
 // ============================================================================
 // MIDDLEWARE PIPELINE (Order matters!)
 // ============================================================================
@@ -253,6 +262,10 @@ app.MapControllers();
 // ============================================================================
 // 📝 Port allocation: 
 //    5001=Identity, 5002=Sales, 5003=SalesTutorial, 5004=Inventory, 5006=Production
-app.Urls.Add("http://localhost:5006");
+// Local dev mein custom port, Docker mein default 8080 use hota hai
+if (app.Environment.IsDevelopment())
+{
+    app.Urls.Add("http://localhost:5006");
+}
 
 app.Run();

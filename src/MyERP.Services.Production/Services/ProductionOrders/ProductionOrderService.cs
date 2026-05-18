@@ -11,6 +11,7 @@ using MyERP.Services.Production.Models;
 using MyERP.Services.Production.Repositories.BOM;
 using MyERP.Services.Production.Repositories.ProductionOrders;
 using MyERP.Services.Production.Repositories.WorkOrder;
+using MyERP.Services.Production.Repositories.ProcessRoute;
 using MyERP.Shared.Events;
 
 
@@ -21,6 +22,7 @@ namespace MyERP.Services.Production.Services.ProductionOrders
         private readonly IProductionOrderRepository _repository;
         private readonly IBOMRepository _bomRepository;
         private readonly IWorkOrderRepository _woRepository;
+        private readonly IProcessRouteRepository _routeRepository;
         private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<ProductionOrderService> _logger;
 
@@ -28,12 +30,14 @@ namespace MyERP.Services.Production.Services.ProductionOrders
             IProductionOrderRepository repository,
             IBOMRepository bomRepository,
             IWorkOrderRepository woRepository,
+            IProcessRouteRepository routeRepository,
             IEventPublisher eventPublisher,
             ILogger<ProductionOrderService> logger)
         {
             _repository = repository;
             _bomRepository = bomRepository;
             _woRepository = woRepository;
+            _routeRepository = routeRepository;
             _eventPublisher = eventPublisher;
             _logger = logger;
         }
@@ -343,8 +347,30 @@ namespace MyERP.Services.Production.Services.ProductionOrders
             var nonCancelled = allWOs
                 .Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
 
-            order.QuantityGood = nonCancelled.Sum(w => w.QuantityCompleted);
-            order.QuantityScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            // Calculate PO qty from LAST step ÷ multiplier (to get product-unit qty)
+            decimal poGood = 0;
+            decimal poScrap = 0;
+
+            var route = await _routeRepository.GetActiveByProductIdAsync(order.ProductId);
+            if (route != null && route.Steps.Any())
+            {
+                var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).First();
+                var lastStepWOs = nonCancelled
+                    .Where(w => w.ProcessRouteStepId == lastStep.ProcessRouteStepId)
+                    .ToList();
+
+                var multiplier = lastStep.OutputMultiplier > 0 ? lastStep.OutputMultiplier : 1;
+                poGood = Math.Round(lastStepWOs.Sum(w => w.QuantityCompleted) / multiplier, 2);
+                poScrap = Math.Round(lastStepWOs.Sum(w => w.QuantityScrap) / multiplier, 2);
+            }
+            else
+            {
+                poGood = nonCancelled.Sum(w => w.QuantityCompleted);
+                poScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            }
+
+            order.QuantityGood = poGood;
+            order.QuantityScrap = poScrap;
             order.Status = ProductionOrderStatus.Completed;
             order.ActualEndDate = DateTime.UtcNow;
             order.UpdatedAt = DateTime.UtcNow;

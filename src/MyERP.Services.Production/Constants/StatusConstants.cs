@@ -20,6 +20,7 @@ namespace MyERP.Services.Production.Constants
     public static class ReservationStatus
     {
         public const string Pending = "Pending";
+        public const string Partial = "Partial";
         public const string Reserved = "Reserved";
         public const string Failed = "Failed";
     }

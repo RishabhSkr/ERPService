@@ -21,7 +21,7 @@ namespace MyERP.Services.Sales.Services.External
         public InventoryServiceClient(HttpClient httpClient, ILogger<InventoryServiceClient> logger)
         {
             _httpClient = httpClient;
-            _logger = logger;
+            _logger = logger;   
             _jsonOptions = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true

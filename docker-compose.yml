@@ -1,0 +1,194 @@
+# ============================================
+# MyERP Docker Compose — Poora System Ek Command Se!
+# Usage: docker compose up -d --build
+# ============================================
+
+services:
+  # ═══════════════════════════════════════
+  # 🗄️ INFRASTRUCTURE (Pehle yeh start hote hain)
+  # ═══════════════════════════════════════
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: myerp-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD:-MyErpPassword123!}"
+      # ${SA_PASSWORD:-default} = .env se padho, nahi mile toh default use karo
+    ports:
+      - "1434:1433"     # Host:Container — host pe 1434, andar 1433
+    volumes:
+      - sqldata:/var/opt/mssql  # Data persist — container delete karo, data safe!
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD:-MyErpPassword123!}" -Q "SELECT 1" -C -l 5
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s   # SQL Server ko 30s do boot hone ke liye
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: myerp-rabbitmq
+    ports:
+      - "5672:5672"     # App communication
+      - "15672:15672"   # Management UI → browser: http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: myerp-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ═══════════════════════════════════════
+  # 🔧 BACKEND SERVICES
+  # ═══════════════════════════════════════
+
+  identity-service:
+    build:
+      context: ./src                               # src/ level — consistent with others
+      dockerfile: MyERP.Services.Identity/Dockerfile
+    container_name: myerp-identity
+    ports:
+      - "5001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      # Double underscore (__) = JSON nesting
+      # ConnectionStrings__DefaultConnection = appsettings ka ConnectionStrings.DefaultConnection
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyERP_Identity;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
+      Jwt__Issuer: "MyERP_Identity"
+      Jwt__Audience: "MyERP_Clients"
+    depends_on:
+      sqlserver:
+        condition: service_healthy   # SQL healthy hone ka wait karega
+
+  sales-service:
+    build:
+      context: ./src                             # src/ level — Shared access ke liye!
+      dockerfile: MyERP.Services.Sales/Dockerfile
+    container_name: myerp-sales
+    ports:
+      - "5002:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=SalesDb;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
+      Jwt__Issuer: "MyERP_Identity"
+      Jwt__Audience: "MyERP_Clients"
+      RabbitMQ__HostName: rabbitmq               # Container name = hostname!
+      RabbitMQ__UserName: guest
+      RabbitMQ__Password: guest
+      Services__InventoryServiceUrl: "http://inventory-service:8080"
+      Services__IdentityService__BaseUrl: "http://identity-service:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  inventory-service:
+    build:
+      context: ./src
+      dockerfile: MyERP.Services.Inventory/Dockerfile
+    container_name: myerp-inventory
+    ports:
+      - "5003:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyERP_Inventory;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
+      Jwt__Issuer: "MyERP_Identity"
+      Jwt__Audience: "MyERP_Clients"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Port: "5672"
+      RabbitMQ__Username: guest
+      RabbitMQ__Password: guest
+      Redis__ConnectionString: "redis:6379"      # redis = container name
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  production-service:
+    build:
+      context: ./src
+      dockerfile: MyERP.Services.Production/Dockerfile
+    container_name: myerp-production
+    ports:
+      - "5004:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=ProductionDb;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
+      Jwt__Issuer: "MyERP_Identity"
+      Jwt__Audience: "MyERP_Clients"
+      RabbitMQ__HostName: rabbitmq
+      RabbitMQ__UserName: guest
+      RabbitMQ__Password: guest
+      Redis__ConnectionString: "redis:6379"
+      Services__InventoryServiceUrl: "http://inventory-service:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: ./src
+      dockerfile: MyERP.Gateway/Dockerfile
+    container_name: myerp-gateway
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyERP_Identity;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
+      Jwt__Issuer: "MyERP_Identity"
+      Jwt__Audience: "MyERP_Clients"
+      # YARP — localhost ki jagah container names use karo!
+      ReverseProxy__Clusters__identity-cluster__Destinations__destination1__Address: "http://identity-service:8080"
+      ReverseProxy__Clusters__sales-cluster__Destinations__destination1__Address: "http://sales-service:8080"
+      ReverseProxy__Clusters__inventory-cluster__Destinations__destination1__Address: "http://inventory-service:8080"
+      ReverseProxy__Clusters__production-cluster__Destinations__destination1__Address: "http://production-service:8080"
+    depends_on:
+      - identity-service
+      - sales-service
+      - inventory-service
+      - production-service
+
+  # ═══════════════════════════════════════
+  # 🖥️ FRONTEND
+  # ═══════════════════════════════════════
+
+  frontend:
+    build:
+      context: ./erp-frontend
+      dockerfile: Dockerfile
+    container_name: myerp-frontend
+    ports:
+      - "80:80"       # Browser: http://localhost
+    depends_on:
+      - gateway
+
+# Persistent data — container delete karo, data rahega
+volumes:
+  sqldata:

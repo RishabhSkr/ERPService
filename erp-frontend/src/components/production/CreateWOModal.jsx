@@ -78,9 +78,9 @@ const CreateWOModal = ({ poId, onClose, onCreated }) => {
                             <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Select Step *</label>
                             <SearchSelect
                                 value={selectedStepId}
-                                displayValue={(() => { const s = (planningInfo.steps || []).find(s => s.processRouteStepId === selectedStepId); return s ? `Step #${s.stepNumber} — ${s.processName} (Remaining: ${s.remainingQuantity})` : ''; })()}
+                                displayValue={(() => { const s = (planningInfo.steps || []).find(s => s.processRouteStepId === selectedStepId); return s ? `Step #${s.stepNumber} — ${s.processName} (Remaining: ${s.remainingQuantity} ${s.outputUnit || ''})` : ''; })()}
                                 placeholder="Choose a step..."
-                                items={(planningInfo.steps || []).map(s => ({...s, _label: `Step #${s.stepNumber} — ${s.processName}`, _remaining: `Remaining: ${s.remainingQuantity}`}))}
+                                items={(planningInfo.steps || []).map(s => ({...s, _label: `Step #${s.stepNumber} — ${s.processName}`, _remaining: `Remaining: ${s.remainingQuantity} ${s.outputUnit || ''}`}))}
                                 title="Select Process Step"
                                 displayFields={[
                                     { key: 'stepNumber', label: '#', width: '10%', bold: true },
@@ -97,8 +97,8 @@ const CreateWOModal = ({ poId, onClose, onCreated }) => {
                         {selectedStep && (
                             <div className="grid grid-cols-3 gap-3 text-center">
                                 <div className="bg-blue-50 rounded-lg p-2">
-                                    <p className="text-xs text-blue-500">Remaining</p>
-                                    <p className="text-xl font-bold text-blue-700">{selectedStep.remainingQuantity}</p>
+                                    <p className="text-xs text-blue-500">Remaining Target</p>
+                                    <p className="text-xl font-bold text-blue-700">{selectedStep.remainingQuantity} <span className="text-sm font-normal">{selectedStep.outputUnit}</span></p>
                                 </div>
                                 <div className="bg-slate-50 rounded-lg p-2">
                                     <p className="text-xs text-slate-400">Setup Time</p>
@@ -118,7 +118,7 @@ const CreateWOModal = ({ poId, onClose, onCreated }) => {
                                 {selectedStep.existingWorkOrders.map(ew => (
                                     <div key={ew.workOrderId} className="flex justify-between">
                                         <span>{ew.workOrderNumber} @ {ew.workCenterCode}</span>
-                                        <span>Planned: {ew.quantityPlanned} | Done: {ew.quantityCompleted} | {ew.status}</span>
+                                        <span>Planned: {ew.quantityPlanned} {ew.outputUnit} | Done: {ew.quantityCompleted} {ew.outputUnit} | {ew.status}</span>
                                     </div>
                                 ))}
                             </div>
@@ -147,11 +147,11 @@ const CreateWOModal = ({ poId, onClose, onCreated }) => {
 
                         {/* Quantity */}
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Quantity *</label>
+                            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Target Quantity ({selectedStep?.outputUnit || 'units'}) *</label>
                             <input type="number" value={qty} onChange={(e) => setQty(e.target.value)}
-                                min="1" max={selectedStep?.remainingQuantity || 99999}
+                                min="0.01" max={selectedStep?.remainingQuantity || 99999} step="0.01"
                                 className="w-full border rounded-lg px-3 py-2 text-sm" required
-                                placeholder={`Max: ${selectedStep?.remainingQuantity || '—'}`} />
+                                placeholder={`Max: ${selectedStep?.remainingQuantity || '—'} ${selectedStep?.outputUnit || ''}`} />
                         </div>
 
                         {/* Schedule */}

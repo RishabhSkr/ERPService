@@ -21,6 +21,7 @@ const FulfillmentDashboard = () => {
         setLoading(true);
         try {
             const res = await getFulfillmentDashboard();
+            console.log("Fulfillment Dashboard Response:", res.data);
             setOrders(res.data?.data || []);
         } catch (err) {
             toast.error('Failed to load dashboard');

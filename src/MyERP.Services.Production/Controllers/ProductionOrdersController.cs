@@ -60,7 +60,7 @@ namespace MyERP.Services.Production.Controllers
         /// <summary>
         /// Create a manual production order (not from sales)
         /// </summary>
-        [HttpPost]
+        [HttpPost("create")]
         public async Task<ActionResult<ApiResponse<ProductionOrderDto>>> Create(
             [FromBody] CreateProductionOrderDto dto)
         {

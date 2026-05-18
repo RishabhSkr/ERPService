@@ -110,7 +110,7 @@ const CreateOrder = () => {
         );
 
         if (response.success) {
-            navigate('/production-plan');
+            navigate('/app/production-plan');
         }
     };
 

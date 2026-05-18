@@ -22,7 +22,7 @@ export const getAllOrders = () => productionApi.get('/production/orders');
 export const getAllPendingOrders = () => productionApi.get('/production/pending-requests/');
 export const getOrdersByStatus = (status) => productionApi.get(`/production/orders/status/${status}`);
 export const getOrderById = (id) => productionApi.get(`/production/orders/${id}`);
-export const createOrder = (data) => productionApi.post('/production/orders', data);
+export const createOrder = (data) => productionApi.post('/production/orders/create', data);
 export const startOrder = (id) => productionApi.patch(`/production/orders/${id}/start`);
 export const completeOrder = (id, data) => productionApi.post(`/production/orders/${id}/complete`, data);
 export const forceCompleteOrder = (id) => productionApi.post(`/production/orders/${id}/force-complete`);
@@ -50,6 +50,7 @@ export const generateWorkOrders = (poId) => productionApi.post(`/production/orde
 export const releaseWO = (woId) => productionApi.patch(`/production/work-orders/${woId}/release`);
 export const cancelWO = (woId, reason) => productionApi.delete(`/production/work-orders/${woId}`, { params: { reason } });
 export const retryWOReservation = (woId) => productionApi.post(`/production/work-orders/${woId}/retry-reservation`);
+export const forceCompleteWO = (woId) => productionApi.post(`/production/work-orders/${woId}/force-complete`);
 
 // Execution (Equipment)
 export const activateWO = (woId, data) => productionApi.post(`/production/work-orders/${woId}/activate`, data);

@@ -49,37 +49,78 @@ namespace MyERP.Services.Production.Repositories.ProcessRoute
             return entity;
         }
 
-        public async Task UpdateRouteAsync(Guid routeId,string routeCode, Guid productId, string? description, Guid workCenterId, List<ProcessRouteStep> newSteps)
+        public async Task UpdateRouteAsync(Guid routeId, string routeCode, Guid productId, string? description, Guid workCenterId, List<DTOs.ProcessRoute.CreateProcessRouteStepDto> stepDtos)
         {
-            // Step 1: Delete old materials and steps directly via SQL (bypass change tracker)
-            await _context.ProcessRouteStepMaterials
-                .Where(m => m.ProcessRouteStep != null && m.ProcessRouteStep.ProcessRouteId == routeId)
-                .ExecuteDeleteAsync();
-                
-            await _context.ProcessRouteSteps
-                .Where(s => s.ProcessRouteId == routeId)
-                .ExecuteDeleteAsync();
-            // Step 2: Update the route fields directly via SQL
-            await _context.ProcessRoutes
-                .Where(r => r.ProcessRouteId == routeId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(r=>r.RouteCode,routeCode)
-                    .SetProperty(r=>r.ProductId,productId)
-                    .SetProperty(r => r.Description, description)
-                    .SetProperty(r => r.WorkCenterId, workCenterId)
-                    .SetProperty(r => r.Version, r => r.Version + 1)
-                    .SetProperty(r => r.UpdatedAt, DateTime.UtcNow)
-                );
+            var route = await _context.ProcessRoutes
+                .Include(r => r.Steps)
+                .FirstOrDefaultAsync(r => r.ProcessRouteId == routeId);
 
-            // Step 3: Add new steps (fresh, untracked entities)
-            if (newSteps.Count > 0)
+            if (route == null) return;
+
+            route.RouteCode = routeCode;
+            route.ProductId = productId;
+            route.Description = description;
+            route.WorkCenterId = workCenterId;
+            route.Version += 1;
+            route.UpdatedAt = DateTime.UtcNow;
+
+            // Build a lookup of existing tracked steps by their ID
+            var existingStepMap = route.Steps.ToDictionary(s => s.ProcessRouteStepId);
+            var matchedIds = new HashSet<Guid>();
+
+            foreach (var dto in stepDtos)
             {
-                _context.ProcessRouteSteps.AddRange(newSteps);
-                await _context.SaveChangesAsync();
+                if (dto.ProcessRouteStepId.HasValue && dto.ProcessRouteStepId.Value != Guid.Empty
+                    && existingStepMap.TryGetValue(dto.ProcessRouteStepId.Value, out var tracked))
+                {
+                    // UPDATE existing tracked entity in-place — no new objects created
+                    tracked.ProcessId = dto.ProcessId;
+                    tracked.StepNumber = dto.StepNumber;
+                    tracked.EquipmentId = dto.EquipmentId;
+                    tracked.SetupTimeMinutes = dto.SetupTimeMinutes;
+                    tracked.RunTimePerUnitMinutes = dto.RunTimePerUnitMinutes;
+                    tracked.OutputMultiplier = dto.OutputMultiplier;
+                    tracked.OutputUnit = dto.OutputUnit;
+                    tracked.Notes = dto.Notes;
+                    matchedIds.Add(tracked.ProcessRouteStepId);
+                }
+                else
+                {
+                    // ADD brand new step — do NOT set ProcessRouteStepId!
+                    // EF Core has ValueGeneratedOnAdd configured, so setting a GUID explicitly
+                    // causes EF to treat it as Modified (existing) instead of Added (new).
+                    route.Steps.Add(new ProcessRouteStep
+                    {
+                        // ProcessRouteStepId left as default (Guid.Empty) — EF generates it
+                        ProcessRouteId = routeId,
+                        StepNumber = dto.StepNumber,
+                        ProcessId = dto.ProcessId,
+                        EquipmentId = dto.EquipmentId,
+                        SetupTimeMinutes = dto.SetupTimeMinutes,
+                        RunTimePerUnitMinutes = dto.RunTimePerUnitMinutes,
+                        OutputMultiplier = dto.OutputMultiplier,
+                        OutputUnit = dto.OutputUnit,
+                        Notes = dto.Notes
+                    });
+                }
             }
 
-            // Step 4: Clear change tracker so next query gets fresh data from DB
-            _context.ChangeTracker.Clear();
+            // REMOVE steps that were not in the incoming DTO list
+            var stepsToRemove = route.Steps.Where(s => !matchedIds.Contains(s.ProcessRouteStepId)
+                && existingStepMap.ContainsKey(s.ProcessRouteStepId)).ToList();
+
+            foreach (var toRemove in stepsToRemove)
+            {
+                bool isUsed = await _context.WorkOrders.AnyAsync(w => w.ProcessRouteStepId == toRemove.ProcessRouteStepId);
+                if (isUsed)
+                {
+                    throw new MyERP.Services.Production.Exceptions.BusinessRuleException(
+                        $"Cannot remove step 'Step {toRemove.StepNumber}' because it is used by a Work Order.");
+                }
+                route.Steps.Remove(toRemove);
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task ClearStepsAsync(Models.ProcessRoute route)

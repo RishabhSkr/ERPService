@@ -8,6 +8,7 @@ import {
     cancelWO,
     retryWOReservation,
     pauseExecution,
+    forceCompleteWO,
 } from '../../api/productionService';
 import CreateWOModal from '../../components/production/CreateWOModal';
 import ActivateWOModal from '../../components/production/ActivateWOModal';
@@ -40,9 +41,9 @@ const WOManagement = () => {
         const res = await requestHandlerFunction(() => getAllOrders());
         if (res.success) {
             const data = res.data?.data?.data || res.data?.data || [];
-            // Only show Released/InProgress POs (can have WOs)
+            // Show Released/InProgress/Completed POs (all that can have WOs)
             const activePOs = (Array.isArray(data) ? data : [])
-                .filter(po => ['Released', 'InProgress'].includes(po.status));
+                .filter(po => ['Released', 'InProgress', 'Completed'].includes(po.status));
             setPOList(activePOs);
         }
     }, [requestHandlerFunction]);
@@ -100,6 +101,15 @@ const WOManagement = () => {
 
     const handlePause = async (woId, execId) => {
         const res = await requestHandlerFunction(() => pauseExecution(woId, execId), 'Execution paused.');
+        if (res.success) fetchWOs();
+    };
+
+    const handleForceComplete = async (wo) => {
+        const confirmed = confirm(
+            `Force-complete "${wo.workOrderNumber}"?\n\nGood: ${wo.quantityCompleted}, Scrap: ${wo.quantityScrap}\nPlanned: ${wo.quantityPlanned}\n\nUnused material will be returned to inventory.`
+        );
+        if (!confirmed) return;
+        const res = await requestHandlerFunction(() => forceCompleteWO(wo.workOrderId), 'Work Order force-completed!');
         if (res.success) fetchWOs();
     };
 
@@ -222,10 +232,10 @@ const WOManagement = () => {
                                             </td>
                                             {/* Qty */}
                                             <td className="p-3 text-center">
-                                                <span className="font-semibold">{wo.quantityCompleted || 0}</span>
-                                                <span className="text-slate-400"> / {wo.quantityPlanned}</span>
+                                                <span className="font-semibold">{wo.quantityCompleted || 0} {wo.outputUnit}</span>
+                                                <span className="text-slate-400"> / {wo.quantityPlanned} {wo.outputUnit}</span>
                                                 {wo.quantityScrap > 0 && (
-                                                    <div className="text-xs text-red-500">⚠ {wo.quantityScrap} scrap</div>
+                                                    <div className="text-xs text-red-500">⚠ {wo.quantityScrap} {wo.outputUnit} scrap</div>
                                                 )}
                                             </td>
                                             {/* Status */}
@@ -306,7 +316,7 @@ const WOManagement = () => {
                                                         </>
                                                     )}
 
-                                                    {/* InProgress → Complete Exec, Pause, Activate (more equipment) */}
+                                                    {/* InProgress → Complete Exec, Pause, Activate, Force Complete */}
                                                     {wo.status === 'InProgress' && (
                                                         <>
                                                             {activeExec && (
@@ -326,6 +336,13 @@ const WOManagement = () => {
                                                                 title="Activate on another equipment">
                                                                 <Play size={12} /> +Equip
                                                             </button>
+                                                            {!activeExec && wo.quantityCompleted > 0 && (
+                                                                <button onClick={() => handleForceComplete(wo)} disabled={loading}
+                                                                    className="px-2 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1"
+                                                                    title="Close WO at current qty, return unused materials">
+                                                                    <CheckCircle size={12} /> Force Done
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>

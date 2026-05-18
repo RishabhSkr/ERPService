@@ -51,6 +51,19 @@ public class MaterialReservationRequestedConsumer : IConsumer<MaterialReservatio
             {
                 _logger.LogWarning("All materials already reserved for WO {WONumber} — skipping",
                     @event.WorkOrderNumber);
+                
+                await _publishEndpoint.Publish(new StockReservedEvent
+                {
+                    ProductionOrderId = @event.ProductionOrderId,
+                    WorkOrderId = @event.WorkOrderId,
+                    Success = true,
+                    FailureReason = null,
+                    ReservedMaterials = @event.Materials.Select(m => new ReservedMaterial
+                    {
+                        RawMaterialId = m.RawMaterialId,
+                        QuantityReserved = m.Quantity
+                    }).ToList()
+                });
                 return;
             }
         }
@@ -66,6 +79,19 @@ public class MaterialReservationRequestedConsumer : IConsumer<MaterialReservatio
             {
                 _logger.LogWarning("All {Count} materials already reserved for PO {OrderNumber} — skipping",
                     poReservedCount, @event.ProductionOrderNumber);
+
+                await _publishEndpoint.Publish(new StockReservedEvent
+                {
+                    ProductionOrderId = @event.ProductionOrderId,
+                    WorkOrderId = @event.WorkOrderId,
+                    Success = true,
+                    FailureReason = null,
+                    ReservedMaterials = @event.Materials.Select(m => new ReservedMaterial
+                    {
+                        RawMaterialId = m.RawMaterialId,
+                        QuantityReserved = m.Quantity
+                    }).ToList()
+                });
                 return;
             }
         }

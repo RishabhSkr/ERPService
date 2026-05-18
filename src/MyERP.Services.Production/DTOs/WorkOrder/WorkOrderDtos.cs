@@ -44,6 +44,7 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         public decimal QuantityPlanned { get; set; }
         public decimal QuantityCompleted { get; set; }
         public decimal QuantityScrap { get; set; }
+        public string OutputUnit { get; set; } = "pcs";
 
         // Status + Reservation
         public string Status { get; set; } = string.Empty;
@@ -134,9 +135,12 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         public int StepNumber { get; set; }
         public string? ProcessCode { get; set; }
         public string ProcessName { get; set; } = string.Empty;
-        public decimal TotalPlanned { get; set; }       // HybridSum of WOs
-        public decimal TotalCompleted { get; set; }      // SUM completed WOs
-        public decimal UnplannedQuantity { get; set; }   // poQty - HybridSum
+        public decimal OutputMultiplier { get; set; } = 1.0m;
+        public string OutputUnit { get; set; } = "pcs";
+        public decimal TargetQuantity { get; set; }     // PO Qty * Multiplier
+        public decimal TotalPlanned { get; set; }       // HybridSum of WOs (in OutputUnit)
+        public decimal TotalCompleted { get; set; }      // SUM completed WOs (in OutputUnit)
+        public decimal UnplannedQuantity { get; set; }   // TargetQuantity - HybridSum
         public decimal ProgressPercentage { get; set; }
         public int WoCount { get; set; }
         public string DisplayStatus { get; set; } = string.Empty;
@@ -163,7 +167,10 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         public int StepNumber { get; set; }
         public string? ProcessCode { get; set; }
         public string ProcessName { get; set; } = string.Empty;
-        public decimal RemainingQuantity { get; set; }   // PO.Qty - HybridSum
+        public decimal OutputMultiplier { get; set; } = 1.0m;
+        public string OutputUnit { get; set; } = "pcs";
+        public decimal TargetQuantity { get; set; }      // PO Qty * Multiplier
+        public decimal RemainingQuantity { get; set; }   // TargetQuantity - HybridSum
         public int SetupTimeMinutes { get; set; }
         public int RunTimePerUnitMinutes { get; set; }
 
@@ -191,6 +198,7 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         public string WorkOrderNumber { get; set; } = string.Empty;
         public decimal QuantityPlanned { get; set; }
         public decimal QuantityCompleted { get; set; }
+        public string OutputUnit { get; set; } = "pcs";
         public string Status { get; set; } = string.Empty;
         public string? WorkCenterCode { get; set; }
     }

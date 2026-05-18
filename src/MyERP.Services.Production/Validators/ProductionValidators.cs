@@ -98,7 +98,7 @@ namespace MyERP.Services.Production.Validators
                                 .GreaterThanOrEqualTo(DateTime.Today).WithMessage("PlannedStartDate must be today or in the future");
 
             RuleFor(x => x.PlannedEndDate)
-                .GreaterThan(x => x.PlannedStartDate).WithMessage("PlannedEndDate must be after PlannedStartDate");
+                .GreaterThanOrEqualTo(x => x.PlannedStartDate).WithMessage("PlannedEndDate must be after PlannedStartDate");
 
             RuleFor(x => x.Priority)
                 .InclusiveBetween(1, 5).WithMessage("Priority must be between 1 and 5");

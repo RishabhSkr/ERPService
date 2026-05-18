@@ -7,6 +7,7 @@ namespace MyERP.Services.Production.Services.WorkOrder
         // === NEW: User-controlled WO creation ===
         Task<WorkOrderDto> CreateAsync(CreateWorkOrderDto dto);
         Task<WorkOrderDto> ReleaseAsync(Guid workOrderId);
+        Task ForceCompleteAsync(Guid workOrderId);
         Task CancelAsync(Guid workOrderId, string reason);
         Task RetryReservationAsync(Guid workOrderId);
         

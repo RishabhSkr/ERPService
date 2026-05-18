@@ -8,7 +8,10 @@ import axios from 'axios';
 const createApiInstance = (baseURL, serviceName) => {
     const instance = axios.create({
         baseURL,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': '69420'
+        },
         timeout: 10000,
     });
 

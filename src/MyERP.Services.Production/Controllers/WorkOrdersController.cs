@@ -88,6 +88,16 @@ namespace MyERP.Services.Production.Controllers
             return Ok(ApiResponse<string>.Ok("Reservation retry initiated"));
         }
 
+        /// <summary>
+        /// Force-complete a WO at current qty (for partial completions)
+        /// </summary>
+        [HttpPost("work-orders/{workOrderId:guid}/force-complete")]
+        public async Task<ActionResult<ApiResponse<string>>> ForceComplete(Guid workOrderId)
+        {
+            await _service.ForceCompleteAsync(workOrderId);
+            return Ok(ApiResponse<string>.Ok("Work Order force-completed"));
+        }
+
         // ====================================
         // EXISTING: Auto-generate (convenience)
         // ====================================

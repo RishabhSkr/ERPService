@@ -102,6 +102,7 @@ const OrderManagement = () => {
     const getReservationColor = (status) => {
         switch (status) {
             case 'Reserved': return 'text-green-600';
+            case 'Partial': return 'text-orange-500';
             case 'Failed': return 'text-red-500';
             case 'Pending': return 'text-yellow-600';
             default: return 'text-gray-400';
@@ -215,7 +216,7 @@ const OrderManagement = () => {
                                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(order.status)}`}>
                                             {order.status}
                                         </span>
-                                        {order.status === 'Released' && (
+                                        {(order.status === 'Released' || order.status === 'InProgress') && (
                                             <div className={`text-xs mt-0.5 font-medium ${getReservationColor(order.reservationStatus)}`}>
                                                 📦 {order.reservationStatus || '-'}
                                             </div>
@@ -245,15 +246,13 @@ const OrderManagement = () => {
                                                 </>
                                             )}
 
-                                            {/* Released → Start (if Reserved), Retry (if Failed), Cancel */}
+                                            {/* Released → Start, Retry (if Failed), Cancel */}
                                             {order.status === 'Released' && (
                                                 <>
-                                                    {order.reservationStatus === 'Reserved' && (
-                                                        <button onClick={() => handleStart(order.id)} disabled={isLoading}
-                                                            className="px-2.5 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1">
-                                                            <PlayCircle size={12} /> Start
-                                                        </button>
-                                                    )}
+                                                    <button onClick={() => handleStart(order.id)} disabled={isLoading}
+                                                        className="px-2.5 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1">
+                                                        <PlayCircle size={12} /> Start
+                                                    </button>
                                                     {order.reservationStatus === 'Failed' && (
                                                         <button onClick={() => handleRetryReservation(order.id)} disabled={isLoading}
                                                             className="px-2.5 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1">

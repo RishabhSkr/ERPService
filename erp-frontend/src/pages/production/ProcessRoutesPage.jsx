@@ -5,6 +5,7 @@ import {
     getProcessRoutes, createProcessRoute, updateProcessRoute,
     getProcesses, getWorkCenters, getEquipment
 } from '../../api/productionService';
+import { getUnits } from '../../api/inventoryService';
 import { getProducts } from '../../api/master/product';
 import SearchSelect from '../../components/common/SearchSelect';
 
@@ -21,6 +22,7 @@ const ProcessRoutesPage = () => {
     const [workCenters, setWorkCenters] = useState([]);
     const [equipmentList, setEquipmentList] = useState([]);
     const [products, setProducts] = useState([]);
+    const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Form state
@@ -44,9 +46,9 @@ const ProcessRoutesPage = () => {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const [routeRes, procRes, wcRes, eqRes, prodRes] = await Promise.all([
+            const [routeRes, procRes, wcRes, eqRes, prodRes, unitRes] = await Promise.all([
                 getProcessRoutes(), getProcesses(), getWorkCenters(), getEquipment(),
-                getProducts()
+                getProducts(), getUnits()
             ]);
             console.log('Route Res', routeRes);
             setRoutes(extractData(routeRes));
@@ -54,6 +56,7 @@ const ProcessRoutesPage = () => {
             setWorkCenters(extractData(wcRes));
             setEquipmentList(extractData(eqRes));
             setProducts(extractProducts(prodRes));
+            setUnits(extractData(unitRes));
         } catch (err) {
             toast.error('Failed to load data');
         } finally {
@@ -74,6 +77,7 @@ const ProcessRoutesPage = () => {
         return {
             stepNumber: num, processId: '', equipmentId: '',
             setupTimeMinutes: '', runTimePerUnitMinutes: '', notes: '',
+            outputMultiplier: '1', outputUnit: 'pcs'
         };
     }
 
@@ -86,12 +90,15 @@ const ProcessRoutesPage = () => {
             workCenterId: route.workCenterId || '',
             description: route.description || '',
             steps: (route.steps || []).map(s => ({
+                processRouteStepId: s.processRouteStepId,
                 stepNumber: s.stepNumber,
                 processId: s.processId || '',
                 equipmentId: s.equipmentId || '',
                 setupTimeMinutes: s.setupTimeMinutes,
                 runTimePerUnitMinutes: s.runTimePerUnitMinutes,
                 notes: s.notes || '',
+                outputMultiplier: s.outputMultiplier || '1',
+                outputUnit: s.outputUnit || 'pcs'
             })),
         });
         setShowForm(true);
@@ -129,12 +136,15 @@ const ProcessRoutesPage = () => {
             workCenterId: formData.workCenterId,
             description: formData.description || null,
             steps: formData.steps.map(s => ({
+                processRouteStepId: s.processRouteStepId || null,
                 stepNumber: s.stepNumber,
                 processId: s.processId,
                 equipmentId: s.equipmentId || null,
                 setupTimeMinutes: parseInt(s.setupTimeMinutes) || 0,
                 runTimePerUnitMinutes: parseInt(s.runTimePerUnitMinutes) || 0,
                 notes: s.notes || null,
+                outputMultiplier: parseFloat(s.outputMultiplier) || 1.0,
+                outputUnit: s.outputUnit || 'pcs'
             })),
         };
 
@@ -247,6 +257,7 @@ const ProcessRoutesPage = () => {
                                                         <th className="text-left py-1">Step</th>
                                                         <th className="text-left py-1">Process</th>
                                                         <th className="text-left py-1">Equipment</th>
+                                                        <th className="text-left py-1">Output Target</th>
                                                         <th className="text-left py-1">Setup (min)</th>
                                                         <th className="text-left py-1">Run/Unit (min)</th>
                                                         <th className="text-left py-1">Notes</th>
@@ -258,6 +269,11 @@ const ProcessRoutesPage = () => {
                                                             <td className="py-2"><span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">#{step.stepNumber}</span></td>
                                                             <td className="py-2 font-medium">{step.processName} <span className="text-slate-400">({step.processCode})</span></td>
                                                             <td className="py-2 text-slate-600">{step.equipmentCode || '-'}</td>
+                                                            <td className="py-2">
+                                                                <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">
+                                                                    1 PO Unit = {step.outputMultiplier} {step.outputUnit}
+                                                                </span>
+                                                            </td>
                                                             <td className="py-2">{step.setupTimeMinutes}</td>
                                                             <td className="py-2">{step.runTimePerUnitMinutes}</td>
                                                             <td className="py-2 text-slate-500">{step.notes || '-'}</td>
@@ -352,8 +368,8 @@ const ProcessRoutesPage = () => {
                                                 <Trash2 size={13} /> Remove
                                             </button>
                                         </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                                            <div>
+                                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
+                                            <div className="md:col-span-2">
                                                 <label className="block text-xs text-slate-500 mb-1">Process *</label>
                                                 <SearchSelect
                                                     value={step.processId}
@@ -372,7 +388,7 @@ const ProcessRoutesPage = () => {
                                                     size="sm"
                                                 />
                                             </div>
-                                            <div>
+                                            <div className="md:col-span-2">
                                                 <label className="block text-xs text-slate-500 mb-1">Equipment</label>
                                                 <SearchSelect
                                                     value={step.equipmentId}
@@ -400,6 +416,25 @@ const ProcessRoutesPage = () => {
                                                 <label className="block text-xs text-slate-500 mb-1">Run/Unit (min)</label>
                                                 <input type="number" value={step.runTimePerUnitMinutes} onChange={(e) => updateStep(si, 'runTimePerUnitMinutes', e.target.value)}
                                                     className="w-full px-2 py-1.5 border rounded text-xs" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-500 mb-1" title="How many output units per 1 planned PO unit?">Out. Multiplier *</label>
+                                                <input type="number" step="0.01" value={step.outputMultiplier} onChange={(e) => updateStep(si, 'outputMultiplier', e.target.value)}
+                                                    className="w-full px-2 py-1.5 border rounded text-xs" required />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-500 mb-1">Out. Unit *</label>
+                                                <select 
+                                                    value={step.outputUnit} 
+                                                    onChange={(e) => updateStep(si, 'outputUnit', e.target.value)}
+                                                    className="w-full px-2 py-1.5 border rounded text-xs" 
+                                                    required
+                                                >
+                                                    <option value="pcs">pcs</option>
+                                                    {units.map((u) => (
+                                                        <option key={u.id} value={u.unitCode}>{u.unitName} ({u.unitCode})</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         </div>
                                         <div>

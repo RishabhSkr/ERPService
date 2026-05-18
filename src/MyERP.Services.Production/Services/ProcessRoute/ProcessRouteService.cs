@@ -77,6 +77,8 @@ namespace MyERP.Services.Production.Services.ProcessRoute
                     EquipmentId = stepDto.EquipmentId,
                     SetupTimeMinutes = stepDto.SetupTimeMinutes,
                     RunTimePerUnitMinutes = stepDto.RunTimePerUnitMinutes,
+                    OutputMultiplier = stepDto.OutputMultiplier,
+                    OutputUnit = stepDto.OutputUnit,
                     Notes = stepDto.Notes
                 };
                 // Materials removed — now defined in BOM Line (industry standard)
@@ -90,27 +92,14 @@ namespace MyERP.Services.Production.Services.ProcessRoute
 
         public async Task<ProcessRouteDto> UpdateAsync(Guid id, CreateProcessRouteDto dto)
         {
-            var entity = await _repository.GetByIdWithDetailsAsync(id);
-            if (entity == null) throw new NotFoundException("ProcessRoute", id);
+            // Single repository call: loads route fresh, modifies tracked entities in-place, saves.
+            // IMPORTANT: Do NOT pre-load the entity here (e.g. via GetByIdWithDetailsAsync),
+            // because that pollutes the EF change tracker and causes DbUpdateConcurrencyException.
+            await _repository.UpdateRouteAsync(id, dto.RouteCode, dto.ProductId, dto.Description, dto.WorkCenterId, dto.Steps);
 
-            // Build new steps list (fresh entities, not tracked)
-            var newSteps = dto.Steps.Select(stepDto => new ProcessRouteStep
-            {
-                ProcessRouteStepId = Guid.NewGuid(),
-                ProcessRouteId = id,
-                StepNumber = stepDto.StepNumber,
-                ProcessId = stepDto.ProcessId,
-                EquipmentId = stepDto.EquipmentId,
-                SetupTimeMinutes = stepDto.SetupTimeMinutes,
-                RunTimePerUnitMinutes = stepDto.RunTimePerUnitMinutes,
-                Notes = stepDto.Notes
-            }).ToList();
-
-            // Single repository call: delete old steps → update route → add new steps
-            // All via ExecuteDelete/ExecuteUpdate — bypasses change tracker completely
-            await _repository.UpdateRouteAsync(id, dto.RouteCode, dto.ProductId, dto.Description, dto.WorkCenterId, newSteps);
-
-            return await GetByIdAsync(id);
+            var result = await GetByIdAsync(id);
+            if (result == null) throw new NotFoundException("ProcessRoute", id);
+            return result;
         }
 
         private static ProcessRouteDto MapToDto(Models.ProcessRoute r) => new()
@@ -131,7 +120,10 @@ namespace MyERP.Services.Production.Services.ProcessRoute
                 EquipmentCode = s.Equipment?.EquipmentCode,
                 EquipmentName = s.Equipment?.EquipmentName,
                 SetupTimeMinutes = s.SetupTimeMinutes,
-                RunTimePerUnitMinutes = s.RunTimePerUnitMinutes, Notes = s.Notes,
+                RunTimePerUnitMinutes = s.RunTimePerUnitMinutes,
+                OutputMultiplier = s.OutputMultiplier,
+                OutputUnit = s.OutputUnit,
+                Notes = s.Notes,
                 // Materials removed — now defined in BOM Line
             }).ToList()
         };

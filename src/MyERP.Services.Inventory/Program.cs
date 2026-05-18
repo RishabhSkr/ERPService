@@ -134,6 +134,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// 🐳 Auto Migration
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+    db.Database.Migrate();
+}
+
 // Configure pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -147,7 +154,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Set port to 5004
-app.Urls.Add("http://localhost:5004");
+// Local dev mein custom port, Docker mein default 8080 use hota hai
+if (app.Environment.IsDevelopment())
+{
+    app.Urls.Add("http://localhost:5004");
+}
 
 app.Run();

@@ -109,7 +109,7 @@ const BOM = () => {
     const updateRow = (i, field, value) => { const n = [...bomItems]; n[i] = { ...n[i], [field]: value }; setBomItems(n); };
     const handleMaterialSelect = (i, mat) => {
         const n = [...bomItems];
-        n[i] = { ...n[i], rawMaterialId: mat.id || mat.rawMaterialId, materialCode: mat.materialCode || mat.code || '', materialName: mat.materialName || mat.name || '', unit: mat.unit || mat.uom || 'pcs' };
+        n[i] = { ...n[i], rawMaterialId: mat.id || mat.rawMaterialId, materialCode: mat.materialCode || mat.code || '', materialName: mat.materialName || mat.name || '', unit: mat.unitName || mat.unit || mat.uom || 'pcs' };
         setBomItems(n);
     };
     const handleProcessSelect = (i, proc) => {
@@ -311,7 +311,7 @@ const BOM = () => {
                                         <td className="px-3 py-3">
                                             <SearchSelect value={item.rawMaterialId} displayValue={item.materialName || 'Select...'} placeholder="Select material..."
                                                 items={materials} title="Select Raw Material"
-                                                displayFields={[{ key: 'materialCode', label: 'Code', width: '30%', bold: true }, { key: 'materialName', label: 'Name', width: '50%' }, { key: 'unit', label: 'Unit', width: '20%' }]}
+                                                displayFields={[{ key: 'materialCode', label: 'Code', width: '30%', bold: true }, { key: 'materialName', label: 'Name', width: '50%' }, { key: 'unitName', label: 'Unit', width: '20%' }]}
                                                 searchKeys={['materialCode', 'materialName', 'code', 'name']} valueKey="id"
                                                 onSelect={(mat) => handleMaterialSelect(index, mat)} size="sm" />
                                         </td>

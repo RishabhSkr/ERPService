@@ -176,16 +176,16 @@ const WODashboard = () => {
                                                         <div className="text-xs text-slate-400">{step.processCode}</div>
                                                     </td>
                                                     <td className="px-5 py-3 text-center font-semibold text-blue-600">
-                                                        {step.totalPlanned || 0}
+                                                        {step.totalPlanned || 0} <span className="text-xs font-normal text-slate-400">{step.outputUnit}</span>
                                                     </td>
                                                     <td className="px-5 py-3 text-center">
                                                         <span className="font-semibold text-green-600 flex items-center gap-1 justify-center">
-                                                            <CheckCircle size={12} /> {step.totalCompleted || 0}
+                                                            <CheckCircle size={12} /> {step.totalCompleted || 0} <span className="text-xs font-normal text-slate-400">{step.outputUnit}</span>
                                                         </span>
                                                     </td>
                                                     <td className="px-5 py-3 text-center">
                                                         <span className={`font-semibold ${step.unplannedQuantity > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                                                            {step.unplannedQuantity || 0}
+                                                            {step.unplannedQuantity || 0} <span className="text-xs font-normal">{step.outputUnit}</span>
                                                         </span>
                                                     </td>
                                                     <td className="px-5 py-3">

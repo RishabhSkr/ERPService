@@ -11,11 +11,14 @@ namespace MyERP.Services.Production.DTOs.ProcessRoute
 
     public class CreateProcessRouteStepDto
     {
+        public Guid? ProcessRouteStepId { get; set; }
         public int StepNumber { get; set; }
         public Guid ProcessId { get; set; }
         public Guid? EquipmentId { get; set; }
         public int SetupTimeMinutes { get; set; }
         public int RunTimePerUnitMinutes { get; set; }
+        public decimal OutputMultiplier { get; set; } = 1.0m;
+        public string OutputUnit { get; set; } = "pcs";
         public string? Notes { get; set; }
         // Materials removed — now defined in BOM Line (industry standard)
     }
@@ -46,6 +49,8 @@ namespace MyERP.Services.Production.DTOs.ProcessRoute
         public string? EquipmentName { get; set; }
         public int SetupTimeMinutes { get; set; }
         public int RunTimePerUnitMinutes { get; set; }
+        public decimal OutputMultiplier { get; set; }
+        public string OutputUnit { get; set; } = string.Empty;
         public string? Notes { get; set; }
         
     }
