@@ -48,6 +48,10 @@ namespace MyERP.Services.Production.Models
         public int RunTimePerUnitMinutes { get; set; }
         public string? Notes { get; set; }
 
+        // Output quantity multiplier (e.g. 1 Pc = 7.29 Kg output)
+        public decimal OutputMultiplier { get; set; } = 1.0m;
+        public string OutputUnit { get; set; } = "pcs";
+
         // Navigation — materials used in this step
         public virtual ICollection<ProcessRouteStepMaterial> Materials { get; set; } = new List<ProcessRouteStepMaterial>();
     }

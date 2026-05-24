@@ -8,6 +8,8 @@ namespace MyERP.Services.Sales.Services.External
         Task<ProductDto?> GetProductByIdAsync(Guid productId);
         Task<bool> ProductExistsAsync(Guid productId);
         Task<List<ProductDto>> GetProductsByIdsAsync(IEnumerable<Guid> productIds);
+        Task<ProductAvailabilityResponse?> CheckAvailabilityAsync(Guid productId, decimal quantity);
+
     }
 
     public class InventoryServiceClient : IInventoryServiceClient
@@ -19,7 +21,7 @@ namespace MyERP.Services.Sales.Services.External
         public InventoryServiceClient(HttpClient httpClient, ILogger<InventoryServiceClient> logger)
         {
             _httpClient = httpClient;
-            _logger = logger;
+            _logger = logger;   
             _jsonOptions = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -69,6 +71,30 @@ namespace MyERP.Services.Sales.Services.External
             
             return products;
         }
+
+        public async Task<ProductAvailabilityResponse?> CheckAvailabilityAsync(Guid productId, decimal quantity)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/inventory/products/{productId}/check-availability?quantity={quantity}");
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Product {ProductId} not found", productId);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var apiResponse = JsonSerializer.Deserialize<InventoryApiResponse<ProductAvailabilityResponse>>(
+                    json, _jsonOptions);
+                return apiResponse?.Data;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking availability for product {ProductId}", productId);
+                throw new ApplicationException($"Failed to check availability for product {productId}", ex);
+            }
+        }
     }
 
     // Internal class for deserializing Inventory API response
@@ -78,4 +104,14 @@ namespace MyERP.Services.Sales.Services.External
         public string? Message { get; set; }
         public T? Data { get; set; }
     }
+        public class ProductAvailabilityResponse
+    {
+        public Guid ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public decimal RequestedQuantity { get; set; }
+        public decimal AvailableStock { get; set; }
+        public bool IsAvailable { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
+
 }

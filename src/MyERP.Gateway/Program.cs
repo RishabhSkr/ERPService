@@ -1,7 +1,11 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Logging;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
+using MyERP.Services.Identity.Data;
+using MyERP.Services.Identity.Repositories;
+using MyERP.Services.Identity.Middleware;
 
 // Enable full error details (ONLY for debugging!)
 IdentityModelEventSource.ShowPII = true;
@@ -61,13 +65,35 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
+// 3.5 Register Identity DbContext & Repository (reuse from Identity Service)
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+    
+// 8. CORS (for frontend access)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 var app = builder.Build();
+app.UseCors("AllowAll");
 
 // 4. Use Authentication & Authorization BEFORE YARP
 app.UseAuthentication();
 app.UseAuthorization();
 
+// 4.5 Permission Check — Reusing Identity's AccessControlMiddleware!
+app.UseMiddleware<AccessControlMiddleware>();
+
 // 5. Map reverse proxy routes
 app.MapReverseProxy();
+
+
 
 app.Run();

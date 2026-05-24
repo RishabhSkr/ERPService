@@ -16,17 +16,20 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
         private readonly ICategoryRepository _categoryRepository;
         private readonly IUnitRepository _unitRepository;
         private readonly IWarehouseRepository _warehouseRepository;
+        private readonly IStorageLocationRepository _locationRepository;
 
         public RawMaterialService(
             IRawMaterialRepository rawMaterialRepository,
             ICategoryRepository categoryRepository,
             IUnitRepository unitRepository,
-            IWarehouseRepository warehouseRepository)
+            IWarehouseRepository warehouseRepository,
+            IStorageLocationRepository locationRepository)
         {
             _rawMaterialRepository = rawMaterialRepository;
             _categoryRepository = categoryRepository;
             _unitRepository = unitRepository;
             _warehouseRepository = warehouseRepository;
+            _locationRepository = locationRepository;
         }
 
         public async Task<RawMaterialResponseDto> CreateAsync(CreateRawMaterialDto dto)
@@ -43,6 +46,15 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
             if (!unitExists)
                 throw new NotFoundException("Unit", dto.UnitId);
 
+            if (dto.DefaultStorageLocationId.HasValue)
+            {
+                var loc = await _locationRepository.GetByIdAsync(dto.DefaultStorageLocationId.Value);
+                if (loc == null)
+                    throw new NotFoundException("StorageLocation", dto.DefaultStorageLocationId.Value);
+                if (loc.LocationType != null && !loc.LocationType.AllowRawMaterials)
+                    throw new BadRequestException($"Storage Location '{loc.LocationCode}' does not allow storing Raw Materials. Its type is '{loc.LocationType.TypeName}'.");
+            }
+
             var rawMaterial = new RawMaterial
             {
                 Id = Guid.NewGuid(),
@@ -54,6 +66,7 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
                 Cost = dto.Cost,
                 MinStockLevel = dto.MinStockLevel,
                 Supplier = dto.Supplier,
+                DefaultStorageLocationId = dto.DefaultStorageLocationId,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -84,7 +97,21 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
                 AvailableStock = r.RawMaterialInventories?.Sum(i => i.CurrentStock - i.ReservedStock) ?? 0,
                 UnitName = r.Unit?.UnitName ?? "",
                 Supplier = r.Supplier,
-                IsActive = r.IsActive
+                MinStockLevel = r.MinStockLevel,
+                DefaultStorageLocationId = r.DefaultStorageLocationId,
+                DefaultStorageLocationCode = r.DefaultStorageLocation?.LocationCode,
+                IsActive = r.IsActive,
+                LocationStocks = r.RawMaterialInventories?
+                    .Where(i => i.CurrentStock > 0 || i.ReservedStock > 0)
+                    .Select(i => new LocationStockDto
+                    {
+                        StorageLocationId = i.StorageLocationId,
+                        LocationCode = i.StorageLocation?.LocationCode ?? "",
+                        WarehouseName = i.Warehouse?.WarehouseName ?? "",
+                        CurrentStock = i.CurrentStock,
+                        ReservedStock = i.ReservedStock,
+                        AvailableStock = i.AvailableStock
+                    }).ToList() ?? new()
             }).ToList();
 
             return new PagedResponse<RawMaterialListDto>(data, pageNumber, pageSize, totalCount);
@@ -119,6 +146,21 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
 
             if (dto.Supplier != null)
                 rawMaterial.Supplier = dto.Supplier;
+
+            if (dto.DefaultStorageLocationId.HasValue)
+            {
+                var loc = await _locationRepository.GetByIdAsync(dto.DefaultStorageLocationId.Value);
+                if (loc == null)
+                    throw new NotFoundException("StorageLocation", dto.DefaultStorageLocationId.Value);
+                if (loc.LocationType != null && !loc.LocationType.AllowRawMaterials)
+                    throw new BadRequestException($"Storage Location '{loc.LocationCode}' does not allow storing Raw Materials. Its type is '{loc.LocationType.TypeName}'.");
+
+                rawMaterial.DefaultStorageLocationId = dto.DefaultStorageLocationId.Value;
+            }
+            else
+            {
+                rawMaterial.DefaultStorageLocationId = null;
+            }
 
             if (dto.IsActive.HasValue)
                 rawMaterial.IsActive = dto.IsActive.Value;
@@ -261,17 +303,17 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
             };
         }
 
-        public async Task<bool> AddStockAsync(Guid rawMaterialId, Guid warehouseId, decimal quantity, string? batchNumber = null)
+        public async Task<bool> AddStockAsync(Guid rawMaterialId, Guid storageLocationId, decimal quantity, string? batchNumber = null)
         {
             var rawMaterialExists = await _rawMaterialRepository.ExistsAsync(rawMaterialId);
             if (!rawMaterialExists)
                 throw new NotFoundException("RawMaterial", rawMaterialId);
 
-            var warehouseExists = await _warehouseRepository.ExistsAsync(warehouseId);
-            if (!warehouseExists)
-                throw new NotFoundException("Warehouse", warehouseId);
+            var location = await _locationRepository.GetByIdAsync(storageLocationId);
+            if (location == null)
+                throw new NotFoundException("StorageLocation", storageLocationId);
 
-            var inventory = await _rawMaterialRepository.GetInventoryAsync(rawMaterialId, warehouseId, batchNumber);
+            var inventory = await _rawMaterialRepository.GetInventoryAsync(rawMaterialId, storageLocationId, batchNumber);
 
             if (inventory == null)
             {
@@ -279,7 +321,8 @@ namespace MyERP.Services.Inventory.Services.RawMaterials
                 {
                     Id = Guid.NewGuid(),
                     RawMaterialId = rawMaterialId,
-                    WarehouseId = warehouseId,
+                    WarehouseId = location.WarehouseId,
+                    StorageLocationId = storageLocationId,
                     CurrentStock = 0,
                     ReservedStock = 0,
                     BatchNumber = batchNumber,

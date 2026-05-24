@@ -8,7 +8,7 @@ namespace MyERP.Services.Identity.DTOs.Roles
         public string RoleName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public bool? IsActive { get; set; }
-        
+        public bool IsSystemRole { get; set; }
         // Computed Properties
         public int UserCount { get; set; }
         public int PermissionCount { get; set; }

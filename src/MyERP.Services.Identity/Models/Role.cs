@@ -11,6 +11,7 @@ namespace MyERP.Services.Identity.Models
         public string Description { get; set; }=string.Empty;
 
         public bool IsActive { get; set; } = true;
+        public bool IsSystemRole { get; set; } = false; // true = cannot be deleted/edited
 
         // Navigation (Reverse relationship)
         public ICollection<User>? Users { get; set; }

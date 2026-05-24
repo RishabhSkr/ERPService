@@ -1,13 +1,13 @@
 namespace MyERP.Services.Production.Constants
 {
     /// <summary>
-    /// Production Order lifecycle: Create → Released → InProgress → Completed
+    /// Production Order lifecycle: Created → Released → InProgress → Completed
     ///                                       ↓
     ///                                   Cancelled (from any state except Completed)
     /// </summary>
     public static class ProductionOrderStatus
     {
-        public const string Create = "Create";
+        public const string Create = "Created";
         public const string Released = "Released";
         public const string InProgress = "InProgress";
         public const string Completed = "Completed";
@@ -20,6 +20,7 @@ namespace MyERP.Services.Production.Constants
     public static class ReservationStatus
     {
         public const string Pending = "Pending";
+        public const string Partial = "Partial";
         public const string Reserved = "Reserved";
         public const string Failed = "Failed";
     }
@@ -37,11 +38,12 @@ namespace MyERP.Services.Production.Constants
     }
 
     /// <summary>
-    /// Work Order: Pending → InProgress → Completed / Cancelled
+    /// Work Order: Pending → Released → InProgress → Completed / Cancelled
     /// </summary>
     public static class WorkOrderStatus
     {
         public const string Pending = "Pending";
+        public const string Released = "Released";
         public const string InProgress = "InProgress";
         public const string Completed = "Completed";
         public const string Cancelled = "Cancelled";

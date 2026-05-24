@@ -7,6 +7,8 @@ using MyERP.Services.Sales.Repositories.Customers;
 using MyERP.Services.Sales.Repositories.SalesOrders;
 using MyERP.Services.Sales.Services.External;
 using MyERP.Services.Sales.Events.Producers.Publishers.MassTransit; 
+using MyERP.Services.Sales.Constants;
+
 namespace MyERP.Services.Sales.Services.SalesOrders
 {
     public class SalesOrderService : ISalesOrderService
@@ -224,6 +226,131 @@ namespace MyERP.Services.Sales.Services.SalesOrders
                 throw new BadRequestException($"Cannot transition from '{currentStatus}' to '{newStatus}'");
         }
 
+
+            // ====================================================================
+        // DISPATCH — Verify stock from Inventory, update dispatched qty
+        // ====================================================================
+        public async Task DispatchAsync(Guid orderId, DispatchRequestDto dto)
+        {
+            var order = await _orderRepository.GetByIdWithItemsAsync(orderId);
+            if (order == null)
+                throw new NotFoundException("SalesOrder", orderId);
+
+            if (order.OrderStatus == "Cancelled" || order.OrderStatus == "Delivered")
+                throw new BadRequestException($"Cannot dispatch order with status '{order.OrderStatus}'");
+
+            foreach (var dispatchItem in dto.Items)
+            {
+                var orderItem = order.Items?.FirstOrDefault(i => i.ProductId == dispatchItem.ProductId);
+                if (orderItem == null)
+                    throw new NotFoundException($"Product {dispatchItem.ProductId} not found in this order");
+
+                var remaining = orderItem.Quantity - orderItem.QuantityDispatched;
+                if (dispatchItem.QuantityToDispatch > remaining)
+                    throw new BadRequestException(
+                        $"Cannot dispatch {dispatchItem.QuantityToDispatch} of {orderItem.ProductName}. Remaining: {remaining}");
+
+                // Check Inventory availability
+                var availability = await _inventoryClient.CheckAvailabilityAsync(
+                    dispatchItem.ProductId, dispatchItem.QuantityToDispatch);
+
+                if (availability == null || !availability.IsAvailable)
+                    throw new BadRequestException(
+                        $"Insufficient stock for {orderItem.ProductName}. Available: {availability?.AvailableStock ?? 0}");
+
+                orderItem.QuantityDispatched += dispatchItem.QuantityToDispatch;
+            }
+
+            // Auto-update status if all items fully dispatched
+            var allDispatched = order.Items!.All(i => i.QuantityDispatched >= i.Quantity);
+            if (allDispatched)
+            {
+                order.OrderStatus = SalesOrderStatus.SHIPPED;
+            }
+
+            order.UpdatedAt = DateTime.UtcNow;
+            await _orderRepository.UpdateAsync(order);
+
+            _logger.LogInformation("Dispatched items for order {OrderNumber}", order.OrderNumber);
+        }
+
+        // ====================================================================
+        // MARK DELIVERED
+        // ====================================================================
+        public async Task MarkDeliveredAsync(Guid orderId)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null)
+                throw new NotFoundException("SalesOrder", orderId);
+
+            if (order.OrderStatus != SalesOrderStatus.SHIPPED)
+                throw new BadRequestException(
+                    $"Cannot mark as delivered. Current status: '{order.OrderStatus}'. Must be 'Shipped' first.");
+
+            order.OrderStatus = SalesOrderStatus.DELIVERED;
+            order.UpdatedAt = DateTime.UtcNow;
+            await _orderRepository.UpdateAsync(order);
+
+            _logger.LogInformation("Order {OrderNumber} delivered", order.OrderNumber);
+        }
+
+        // ====================================================================
+        // FULFILLMENT DASHBOARD
+        // ====================================================================
+        public async Task<List<FulfillmentDashboardDto>> GetFulfillmentDashboardAsync()
+        {
+            var orders = await _orderRepository.GetActiveOrdersWithItemsAsync();
+
+            var dashboard = new List<FulfillmentDashboardDto>();
+
+            foreach (var order in orders)
+            {
+                var dto = new FulfillmentDashboardDto
+                {
+                    OrderId = order.Id,
+                    OrderNumber = order.OrderNumber,
+                    CustomerName = order.Customer?.CustomerName ?? "",
+                    Status = order.OrderStatus,
+                    TotalAmount = order.TotalAmount,
+                    Items = new List<FulfillmentItemDto>()
+                };
+
+                foreach (var item in order.Items ?? new List<SalesOrderItem>())
+                {
+                    // Check available stock from Inventory
+                    decimal availableStock = 0;
+                    try
+                    {
+                        var product = await _inventoryClient.GetProductByIdAsync(item.ProductId);
+                        availableStock = product?.AvailableStock ?? 0;
+                    }
+                    catch { /* Inventory service down — show 0 */ }
+
+                    var remaining = item.Quantity - item.QuantityDispatched;
+
+                    dto.Items.Add(new FulfillmentItemDto
+                    {
+                        ProductId = item.ProductId,
+                        ProductCode = item.ProductCode,
+                        ProductName = item.ProductName,
+                        Ordered = item.Quantity,
+                        Produced = item.QuantityProduced,
+                        AvailableInInventory = availableStock,
+                        Dispatched = item.QuantityDispatched,
+                        Remaining = remaining,
+                        CanDispatch = Math.Min(availableStock, remaining),
+                        ProgressPercent = item.Quantity > 0
+                            ? Math.Round((item.QuantityProduced / item.Quantity) * 100, 2)
+                            : 0
+                    });
+                }
+
+                dashboard.Add(dto);
+            }
+
+            return dashboard;
+        }
+
         private static SalesOrderResponseDto MapToDto(SalesOrder order)
         {
             return new SalesOrderResponseDto
@@ -246,6 +373,8 @@ namespace MyERP.Services.Sales.Services.SalesOrders
                     ProductId = i.ProductId,
                     ProductCode = i.ProductCode,
                     ProductName = i.ProductName,
+                    QuantityProduced = i.QuantityProduced,
+                    QuantityDispatched = i.QuantityDispatched,
                     Quantity = i.Quantity,
                     UnitPrice = i.UnitPrice,
                     TotalPrice = i.TotalPrice

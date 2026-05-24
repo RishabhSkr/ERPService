@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyERP.Services.Sales.Data;
 using MyERP.Services.Sales.Models;
+using MyERP.Services.Sales.Constants;
 
 namespace MyERP.Services.Sales.Repositories.SalesOrders
 {
@@ -94,5 +95,16 @@ namespace MyERP.Services.Sales.Repositories.SalesOrders
             var lastNumber = int.Parse(lastOrder.OrderNumber.Substring(prefix.Length));
             return $"{prefix}{(lastNumber + 1).ToString("D4")}";
         }
+
+        public async Task<IEnumerable<SalesOrder>> GetActiveOrdersWithItemsAsync()
+        {
+            return await _context.SalesOrders
+                .Include(o => o.Customer)
+                .Include(o => o.Items)
+                .Where(o => o.OrderStatus != SalesOrderStatus.DELIVERED && o.OrderStatus != SalesOrderStatus.CANCELLED)
+                .OrderByDescending(o => o.CreatedAt)
+                .ToListAsync();
+        }
+
     }
 }

@@ -11,6 +11,10 @@ namespace MyERP.Services.Inventory.DTOs.Products
         public decimal ReservedStock { get; set; }
         public decimal AvailableStock { get; set; }
         public string UnitName { get; set; } = string.Empty;
+        public decimal MinStockLevel { get; set; }
+        public Guid? DefaultStorageLocationId { get; set; }
+        public string? DefaultStorageLocationCode { get; set; }
         public bool IsActive { get; set; }
+        public List<LocationStockDto> LocationStocks { get; set; } = new();
     }
 }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MyERP.Services.Sales.DTOs
 {
     /// <summary>
@@ -9,6 +11,7 @@ namespace MyERP.Services.Sales.DTOs
         public string ProductCode { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        [JsonPropertyName("totalAvailable")]
         public decimal AvailableStock { get; set; }
         public bool IsActive { get; set; }
     }

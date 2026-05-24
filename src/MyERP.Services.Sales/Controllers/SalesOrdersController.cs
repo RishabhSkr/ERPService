@@ -8,7 +8,7 @@ namespace MyERP.Services.Sales.Controllers
 {
     [ApiController]
     [Route("api/sales/orders")]
-    [Authorize(Policy = "DynamicPermission")]
+    [Authorize]
     public class SalesOrdersController : ControllerBase
     {
         private readonly ISalesOrderService _orderService;
@@ -63,5 +63,35 @@ namespace MyERP.Services.Sales.Controllers
             await _orderService.CancelAsync(id, reason);
             return Ok(ApiResponse.Ok("Order cancelled successfully"));
         }
+        // ====================================================================
+        // DISPATCH — Send goods to customer
+        // ====================================================================
+        [HttpPost("{id}/dispatch")]
+        public async Task<IActionResult> Dispatch(Guid id, [FromBody] DispatchRequestDto dto)
+        {
+            await _orderService.DispatchAsync(id, dto);
+            return Ok(ApiResponse.Ok("Items dispatched successfully"));
+        }
+
+        // ====================================================================
+        // MARK DELIVERED
+        // ====================================================================
+        [HttpPatch("{id}/deliver")]
+        public async Task<IActionResult> MarkDelivered(Guid id)
+        {
+            await _orderService.MarkDeliveredAsync(id);
+            return Ok(ApiResponse.Ok("Order marked as delivered"));
+        }
+
+        // ====================================================================
+        // FULFILLMENT DASHBOARD
+        // ====================================================================
+        [HttpGet("fulfillment-dashboard")]
+        public async Task<IActionResult> GetFulfillmentDashboard()
+        {
+            var result = await _orderService.GetFulfillmentDashboardAsync();
+            return Ok(ApiResponse<List<FulfillmentDashboardDto>>.Ok(result));
+        }
+
     }
 }

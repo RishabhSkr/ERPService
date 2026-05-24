@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Inventory.DTOs;
 using MyERP.Services.Inventory.DTOs.RawMaterials;
 using MyERP.Services.Inventory.Services.RawMaterials;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Inventory.Controllers
 {
     [ApiController]
     [Route("api/inventory/raw-materials")]
+    [Authorize]
     public class RawMaterialsController : ControllerBase
     {
         private readonly IRawMaterialService _rawMaterialService;
@@ -80,14 +82,14 @@ namespace MyERP.Services.Inventory.Controllers
         [HttpPost("{id}/add-stock")]
         public async Task<IActionResult> AddStock(Guid id, [FromBody] AddRawMaterialStockDto dto)
         {
-            await _rawMaterialService.AddStockAsync(id, dto.WarehouseId, dto.Quantity, dto.BatchNumber);
+            await _rawMaterialService.AddStockAsync(id, dto.StorageLocationId, dto.Quantity, dto.BatchNumber);
             return Ok(ApiResponse.Ok("Stock added successfully"));
         }
     }
 
     public class AddRawMaterialStockDto
     {
-        public Guid WarehouseId { get; set; }
+        public Guid StorageLocationId { get; set; }
         public decimal Quantity { get; set; }
         public string? BatchNumber { get; set; }
     }

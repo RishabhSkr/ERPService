@@ -66,6 +66,11 @@ namespace MyERP.Services.Production.Data
                 entity.HasKey(e => e.BOMLineId);
                 entity.Property(e => e.Quantity).HasPrecision(18, 4);
                 entity.Property(e => e.ScrapPercentage).HasPrecision(5, 2);
+                entity.HasIndex(e => e.ProcessId);
+                entity.HasOne(e => e.Process)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProcessId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             // ========================================

@@ -23,6 +23,7 @@ namespace MyERP.Services.Inventory.Repositories.Categories
             return await _context.Categories
                 .Include(c => c.Products)
                 .Include(c => c.RawMaterials)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
@@ -36,6 +37,7 @@ namespace MyERP.Services.Inventory.Repositories.Categories
             return await _context.Categories
                 .Include(c => c.Products)
                 .Include(c => c.RawMaterials)
+                .AsSplitQuery()
                 .Where(c => c.IsActive)
                 .OrderBy(c => c.CategoryName)
                 .ToListAsync();

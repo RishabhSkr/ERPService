@@ -9,5 +9,7 @@ namespace MyERP.Services.Identity.Services.Roles
         Task<Guid> CreateRoleAsync(RoleDto request);
         Task UpdateRoleAsync(RoleDto request);
         Task DeleteRoleAsync(Guid roleId);
+        Task<IEnumerable<RoleDto>> GetPublicRolesAsync();
+        
     }
 }

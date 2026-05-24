@@ -2,6 +2,7 @@ using MyERP.Services.Production.DTOs.ProcessRoute;
 using MyERP.Services.Production.Exceptions;
 using MyERP.Services.Production.Models;
 using MyERP.Services.Production.Repositories.ProcessRoute;
+using System.Text.Json;
 
 namespace MyERP.Services.Production.Services.ProcessRoute
 {
@@ -32,6 +33,22 @@ namespace MyERP.Services.Production.Services.ProcessRoute
         public async Task<IEnumerable<ProcessRouteDto>> GetAllAsync()
         {
             var entities = await _repository.GetAllAsync();
+            
+            //  // 1. Mapping karien
+            // var result = entities.Select(MapToDto);
+            // // 2. Debugging ke liye JSON mein convert karein
+            // var options = new JsonSerializerOptions 
+            // { 
+            //     WriteIndented = true, // Isse JSON sundar (readable) dikhega
+            //     ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles 
+            // };
+            // string jsonString = JsonSerializer.Serialize(result, options);
+            // // 3. Print karein
+            // Console.WriteLine("--- START PROCESS ROUTE DATA ---");
+            // Console.WriteLine(jsonString);
+            // Console.WriteLine("--- END PROCESS ROUTE DATA ---");
+            // return result;
+
             return entities.Select(MapToDto);
         }
 
@@ -60,23 +77,11 @@ namespace MyERP.Services.Production.Services.ProcessRoute
                     EquipmentId = stepDto.EquipmentId,
                     SetupTimeMinutes = stepDto.SetupTimeMinutes,
                     RunTimePerUnitMinutes = stepDto.RunTimePerUnitMinutes,
+                    OutputMultiplier = stepDto.OutputMultiplier,
+                    OutputUnit = stepDto.OutputUnit,
                     Notes = stepDto.Notes
                 };
-
-                foreach (var matDto in stepDto.Materials)
-                {
-                    step.Materials.Add(new ProcessRouteStepMaterial
-                    {
-                        Id = Guid.NewGuid(),
-                        ProcessRouteStepId = step.ProcessRouteStepId,
-                        BOMLineId = matDto.BOMLineId,
-                        RawMaterialId = matDto.RawMaterialId,
-                        MaterialCode = matDto.MaterialCode,
-                        MaterialName = matDto.MaterialName,
-                        Quantity = matDto.Quantity,
-                        Unit = matDto.Unit
-                    });
-                }
+                // Materials removed — now defined in BOM Line (industry standard)
                 entity.Steps.Add(step);
             }
 
@@ -87,71 +92,41 @@ namespace MyERP.Services.Production.Services.ProcessRoute
 
         public async Task<ProcessRouteDto> UpdateAsync(Guid id, CreateProcessRouteDto dto)
         {
-            var entity = await _repository.GetByIdWithDetailsAsync(id);
-            if (entity == null) throw new NotFoundException("ProcessRoute", id);
+            // Single repository call: loads route fresh, modifies tracked entities in-place, saves.
+            // IMPORTANT: Do NOT pre-load the entity here (e.g. via GetByIdWithDetailsAsync),
+            // because that pollutes the EF change tracker and causes DbUpdateConcurrencyException.
+            await _repository.UpdateRouteAsync(id, dto.RouteCode, dto.ProductId, dto.Description, dto.WorkCenterId, dto.Steps);
 
-            entity.Description = dto.Description;
-            entity.WorkCenterId = dto.WorkCenterId;
-
-            // Clear old steps and add new
-            await _repository.ClearStepsAsync(entity);
-
-            foreach (var stepDto in dto.Steps)
-            {
-                var step = new ProcessRouteStep
-                {
-                    ProcessRouteStepId = Guid.NewGuid(),
-                    ProcessRouteId = entity.ProcessRouteId,
-                    StepNumber = stepDto.StepNumber,
-                    ProcessId = stepDto.ProcessId,
-                    EquipmentId = stepDto.EquipmentId,
-                    SetupTimeMinutes = stepDto.SetupTimeMinutes,
-                    RunTimePerUnitMinutes = stepDto.RunTimePerUnitMinutes,
-                    Notes = stepDto.Notes
-                };
-
-                foreach (var matDto in stepDto.Materials)
-                {
-                    step.Materials.Add(new ProcessRouteStepMaterial
-                    {
-                        Id = Guid.NewGuid(),
-                        ProcessRouteStepId = step.ProcessRouteStepId,
-                        BOMLineId = matDto.BOMLineId,
-                        RawMaterialId = matDto.RawMaterialId,
-                        MaterialCode = matDto.MaterialCode,
-                        MaterialName = matDto.MaterialName,
-                        Quantity = matDto.Quantity,
-                        Unit = matDto.Unit
-                    });
-                }
-                entity.Steps.Add(step);
-            }
-
-            await _repository.UpdateAsync(entity);
-            return await GetByIdAsync(id);
+            var result = await GetByIdAsync(id);
+            if (result == null) throw new NotFoundException("ProcessRoute", id);
+            return result;
         }
 
         private static ProcessRouteDto MapToDto(Models.ProcessRoute r) => new()
         {
             ProcessRouteId = r.ProcessRouteId, RouteCode = r.RouteCode,
             ProductId = r.ProductId,
+            WorkCenterId = r.WorkCenterId,
             WorkCenterCode = r.WorkCenter?.CenterCode ?? "",
             WorkCenterName = r.WorkCenter?.CenterName ?? "",
             Version = r.Version, IsActive = r.IsActive, Description = r.Description,
             Steps = r.Steps.OrderBy(s => s.StepNumber).Select(s => new ProcessRouteStepDto
             {
                 ProcessRouteStepId = s.ProcessRouteStepId, StepNumber = s.StepNumber,
+                ProcessId = s.ProcessId,
                 ProcessCode = s.Process?.ProcessCode ?? "",
                 ProcessName = s.Process?.ProcessName ?? "",
+                EquipmentId = s.EquipmentId,
                 EquipmentCode = s.Equipment?.EquipmentCode,
+                EquipmentName = s.Equipment?.EquipmentName,
                 SetupTimeMinutes = s.SetupTimeMinutes,
-                RunTimePerUnitMinutes = s.RunTimePerUnitMinutes, Notes = s.Notes,
-                Materials = s.Materials.Select(m => new StepMaterialDto
-                {
-                    RawMaterialId = m.RawMaterialId, MaterialCode = m.MaterialCode,
-                    MaterialName = m.MaterialName, Quantity = m.Quantity, Unit = m.Unit
-                }).ToList()
+                RunTimePerUnitMinutes = s.RunTimePerUnitMinutes,
+                OutputMultiplier = s.OutputMultiplier,
+                OutputUnit = s.OutputUnit,
+                Notes = s.Notes,
+                // Materials removed — now defined in BOM Line
             }).ToList()
         };
+
     }
 }

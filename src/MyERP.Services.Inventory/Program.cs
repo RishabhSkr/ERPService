@@ -14,9 +14,12 @@ using MyERP.Services.Inventory.Services.Units;
 using MyERP.Services.Inventory.Services.Products;
 using MyERP.Services.Inventory.Services.RawMaterials;
 using MyERP.Services.Inventory.Services.StockMovements;
+using MyERP.Services.Inventory.Services.Warehouses;
 using MyERP.Services.Inventory.Validators;
 using MassTransit;
 using MyERP.Services.Inventory.Events.Consumers;
+using MyERP.Services.Inventory.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,15 +30,12 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<MaterialReturnRequestedConsumer>();
     x.AddConsumer<BatchConcludedConsumer>();
     
-    // Configure RabbitMQ
-    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    // Configure RabbitMQ — URI-based config for CloudAMQP compatibility
+    var rabbitUri = builder.Configuration["RabbitMQ:Uri"]
+        ?? "amqp://guest:guest@localhost:5672/";
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host(rabbitHost, "/", h =>
-        {
-            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
-            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
-        });
+        cfg.Host(new Uri(rabbitUri));
         
         // Configure all endpoints (including our explicit "sales-order-created")
         cfg.ConfigureEndpoints(context);
@@ -48,7 +48,7 @@ builder.Services.AddMassTransit(x =>
 
 // 1. Database Connection
 builder.Services.AddDbContext<InventoryDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Controllers
 builder.Services.AddControllers();
@@ -87,12 +87,25 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+    {
+        policy.Requirements.Add(new PermissionRequirement());
+    });
+});
 // 6. Register Repositories
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IUnitRepository, UnitRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IRawMaterialRepository, RawMaterialRepository>();
 builder.Services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+builder.Services.AddScoped<IStorageLocationTypeRepository, StorageLocationTypeRepository>();
+builder.Services.AddScoped<IStorageLocationRepository, StorageLocationRepository>();
 builder.Services.AddScoped<IStockMovementRepository, StockMovementRepository>();
 
 // 7. Register Services
@@ -101,6 +114,9 @@ builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IRawMaterialService, RawMaterialService>();
 builder.Services.AddScoped<IStockMovementService, StockMovementService>();
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
+builder.Services.AddScoped<IStorageLocationTypeService, StorageLocationTypeService>();
+builder.Services.AddScoped<IStorageLocationService, StorageLocationService>();
 
 // 8. CORS (for frontend access)
 builder.Services.AddCors(options =>
@@ -115,6 +131,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// 🐳 Auto Migration
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+    db.Database.Migrate();
+}
+
 // Configure pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -128,7 +151,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Set port to 5004
-app.Urls.Add("http://localhost:5004");
+// Local dev mein custom port, Docker mein default 8080 use hota hai
+if (app.Environment.IsDevelopment())
+{
+    app.Urls.Add("http://localhost:5004");
+}
 
 app.Run();

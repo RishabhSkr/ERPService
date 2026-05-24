@@ -17,5 +17,6 @@ namespace MyERP.Services.Production.Repositories.Equipment
         Task<IEnumerable<EquipmentProcess>> GetLinkedProcessesAsync(Guid equipmentId);
         Task ReplaceLinkedProcessesAsync(Guid equipmentId, List<Guid> processIds);
         Task<bool> CanPerformProcessAsync(Guid equipmentId, Guid processId);
+        Task<IEnumerable<Models.Equipment>> GetByProcessIdAsync(Guid processId);
     }
 }

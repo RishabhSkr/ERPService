@@ -10,6 +10,8 @@ using MyERP.Services.Production.Exceptions;
 using MyERP.Services.Production.Models;
 using MyERP.Services.Production.Repositories.BOM;
 using MyERP.Services.Production.Repositories.ProductionOrders;
+using MyERP.Services.Production.Repositories.WorkOrder;
+using MyERP.Services.Production.Repositories.ProcessRoute;
 using MyERP.Shared.Events;
 
 
@@ -19,17 +21,23 @@ namespace MyERP.Services.Production.Services.ProductionOrders
     {
         private readonly IProductionOrderRepository _repository;
         private readonly IBOMRepository _bomRepository;
+        private readonly IWorkOrderRepository _woRepository;
+        private readonly IProcessRouteRepository _routeRepository;
         private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<ProductionOrderService> _logger;
 
         public ProductionOrderService(
             IProductionOrderRepository repository,
             IBOMRepository bomRepository,
+            IWorkOrderRepository woRepository,
+            IProcessRouteRepository routeRepository,
             IEventPublisher eventPublisher,
             ILogger<ProductionOrderService> logger)
         {
             _repository = repository;
             _bomRepository = bomRepository;
+            _woRepository = woRepository;
+            _routeRepository = routeRepository;
             _eventPublisher = eventPublisher;
             _logger = logger;
         }
@@ -86,7 +94,11 @@ namespace MyERP.Services.Production.Services.ProductionOrders
                 ProductCode = dto.ProductCode,
                 ProductName = dto.ProductName,
                 BOMId = dto.BOMId,
+                WorkCenterId = dto.WorkCenterId,
+                WorkCenterName = dto.WorkCenterName,
                 QuantityPlanned = dto.QuantityPlanned,
+                BomCode = bom.BomCode,
+                BomVersion = bom.Version,
                 PlannedStartDate = dto.PlannedStartDate,
                 PlannedEndDate = dto.PlannedEndDate,
                 Status = ProductionOrderStatus.Create,
@@ -148,11 +160,11 @@ namespace MyERP.Services.Production.Services.ProductionOrders
 
             await _repository.UpdateAsync(order);
 
-            // STEP 7: Publish event to Inventory Service
-            await PublishReservationEvent(order, bom);
+            // PO-LEVEL RESERVATION DISABLED — now done at WO level
+            // await PublishReservationEvent(order, bom);
 
             _logger.LogInformation(
-                "Released ProductionOrder {OrderNumber}, BOM {BomCode} v{Version}, reservation pending",
+                "Released ProductionOrder {OrderNumber}, BOM {BomCode} v{Version}, reservation at PO level Event Disabled",
                 order.OrderNumber, bom.BomCode, bom.Version);
         }
 
@@ -185,8 +197,9 @@ namespace MyERP.Services.Production.Services.ProductionOrders
             await _repository.UpdateAsync(order);
 
             // Re-publish reservation event
-            var bom = await _bomRepository.GetByIdAsync(order.BOMId);
-            await PublishReservationEvent(order, bom);
+            // PO-LEVEL RESERVATION DISABLED — now done at WO level
+            // var bom = await _bomRepository.GetByIdAsync(order.BOMId);
+            // await PublishReservationEvent(order, bom);
 
             _logger.LogInformation(
                 "Retrying reservation for {OrderNumber}, attempt #{Attempt}",
@@ -205,12 +218,13 @@ namespace MyERP.Services.Production.Services.ProductionOrders
             if (order.Status != ProductionOrderStatus.Released)
                 throw new BusinessRuleException(
                     $"Cannot start order with status '{order.Status}'. Must be 'Released'.");
-
-            // Sub-state check: materials must be reserved!
-            if (order.ReservationStatus != ReservationStatus.Reserved)
-                throw new BusinessRuleException(
-                    $"Cannot start production — materials not reserved yet. " +
-                    $"Reservation status: '{order.ReservationStatus}'.");
+            
+            // PO level reservation disabled- WO level enabled
+            // // Sub-state check: materials must be reserved!
+            // if (order.ReservationStatus != ReservationStatus.Reserved)
+            //     throw new BusinessRuleException(
+            //         $"Cannot start production — materials not reserved yet. " +
+            //         $"Reservation status: '{order.ReservationStatus}'.");
 
             order.Status = ProductionOrderStatus.InProgress;
             order.ActualStartDate = DateTime.UtcNow;
@@ -289,29 +303,83 @@ namespace MyERP.Services.Production.Services.ProductionOrders
 
             await _repository.UpdateAsync(order);
 
-            // Publish completion event for Inventory
-            var completionEvent = new BatchConcludedEvent
-            {
-                ProductionOrderId = order.Id,
-                ProductionOrderNumber = order.OrderNumber,
-                ProductId = order.ProductId,
-                ProductCode = order.ProductCode,
-                QuantityGood = dto.QuantityGood,
-                QuantityScrap = dto.QuantityScrap,
-                MaterialsConsumed = order.MaterialRequirements.Select(r => new MaterialConsumed
-                {
-                    RawMaterialId = r.RawMaterialId,
-                    MaterialCode = r.MaterialCode,
-                    QuantityConsumed = r.QuantityConsumed,
-                    QuantityReturned = r.QuantityReserved - r.QuantityConsumed,
-                    Unit = r.Unit
-                }).ToList()
-            };
-            await _eventPublisher.PublishAsync(completionEvent);
+            // PO-LEVEL COMPLETION EVENT DISABLED — now handled at WO level
+            // var completionEvent = new BatchConcludedEvent
+            // {
+            //     ProductionOrderId = order.Id,
+            //     ProductionOrderNumber = order.OrderNumber,
+            //     ProductId = order.ProductId,
+            //     ProductCode = order.ProductCode,
+            //     QuantityGood = dto.QuantityGood,
+            //     QuantityScrap = dto.QuantityScrap,
+            //     MaterialsConsumed = order.MaterialRequirements.Select(r => new MaterialConsumed
+            //     {
+            //         RawMaterialId = r.RawMaterialId,
+            //         MaterialCode = r.MaterialCode,
+            //         QuantityConsumed = r.QuantityConsumed,
+            //         QuantityReturned = r.QuantityReserved - r.QuantityConsumed,
+            //         Unit = r.Unit
+            //     }).ToList()
+            // };
+            // await _eventPublisher.PublishAsync(completionEvent);
 
             _logger.LogInformation(
-                "Completed ProductionOrder {OrderNumber}: Good={Good}, Scrap={Scrap}",
+                "Completed ProductionOrder {OrderNumber}: Good={Good}, Scrap={Scrap} — Inventory updates at WO level",
                 order.OrderNumber, dto.QuantityGood, dto.QuantityScrap);
+        }
+
+        /// <summary>
+        /// Force-complete PO — sums quantities from all non-cancelled WOs.
+        /// No user input needed. Used as manual fallback for partial completion.
+        /// </summary>
+        public async Task ForceCompleteAsync(Guid id)
+        {
+            var order = await _repository.GetByIdAsync(id);
+            if (order == null)
+                throw new NotFoundException("ProductionOrder", id);
+
+            if (order.Status != ProductionOrderStatus.InProgress)
+                throw new BusinessRuleException(
+                    $"Cannot complete order with status '{order.Status}'. Must be 'InProgress'.");
+
+            // Sum from WOs — no manual qty input needed
+            var allWOs = await _woRepository.GetAllByProductionOrderWithDetailsAsync(id);
+            var nonCancelled = allWOs
+                .Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
+
+            // Calculate PO qty from LAST step ÷ multiplier (to get product-unit qty)
+            decimal poGood = 0;
+            decimal poScrap = 0;
+
+            var route = await _routeRepository.GetActiveByProductIdAsync(order.ProductId);
+            if (route != null && route.Steps.Any())
+            {
+                var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).First();
+                var lastStepWOs = nonCancelled
+                    .Where(w => w.ProcessRouteStepId == lastStep.ProcessRouteStepId)
+                    .ToList();
+
+                var multiplier = lastStep.OutputMultiplier > 0 ? lastStep.OutputMultiplier : 1;
+                poGood = Math.Round(lastStepWOs.Sum(w => w.QuantityCompleted) / multiplier, 2);
+                poScrap = Math.Round(lastStepWOs.Sum(w => w.QuantityScrap) / multiplier, 2);
+            }
+            else
+            {
+                poGood = nonCancelled.Sum(w => w.QuantityCompleted);
+                poScrap = nonCancelled.Sum(w => w.QuantityScrap);
+            }
+
+            order.QuantityGood = poGood;
+            order.QuantityScrap = poScrap;
+            order.Status = ProductionOrderStatus.Completed;
+            order.ActualEndDate = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            await _repository.UpdateAsync(order);
+
+            _logger.LogInformation(
+                "Force-completed PO {OrderNumber}: Good={Good}, Scrap={Scrap}, WOs={WOCount}",
+                order.OrderNumber, order.QuantityGood, order.QuantityScrap, nonCancelled.Count);
         }
 
         /// <summary>
@@ -345,25 +413,32 @@ namespace MyERP.Services.Production.Services.ProductionOrders
 
             if (wasReserved)
             {
-                // SAGA: Return reserved materials to Inventory
-                var returnEvent = new MaterialReturnRequestedEvent
-                {
-                    ProductionOrderId = order.Id,
-                    ProductionOrderNumber = order.OrderNumber,
-                    MaterialsConsumed = order.MaterialRequirements.Select(r => new MaterialConsumed
-                    {
-                        RawMaterialId = r.RawMaterialId,
-                        MaterialCode = r.MaterialCode,
-                        QuantityConsumed = 0, // Nothing consumed yet
-                        QuantityReturned = r.QuantityReserved, // Return all reserved
-                        Unit = r.Unit
-                    }).ToList()
-                };
-                await _eventPublisher.PublishAsync(returnEvent);
+                // // SAGA: Return reserved materials to Inventory
+                // var returnEvent = new MaterialReturnRequestedEvent
+                // {
+                //     ProductionOrderId = order.Id,
+                //     ProductionOrderNumber = order.OrderNumber,
+                //     MaterialsConsumed = order.MaterialRequirements.Select(r => new MaterialConsumed
+                //     {
+                //         RawMaterialId = r.RawMaterialId,
+                //         MaterialCode = r.MaterialCode,
+                //         QuantityConsumed = 0, // Nothing consumed yet
+                //         QuantityReturned = r.QuantityReserved, // Return all reserved
+                //         Unit = r.Unit
+                //     }).ToList()
+                // };
+                // await _eventPublisher.PublishAsync(returnEvent);
 
+                // _logger.LogInformation(
+                //     "Cancelled ProductionOrder {OrderNumber} — Saga: returning reserved materials",
+                //     order.OrderNumber);
+                
+                // PO-LEVEL RETURN DISABLED — now handled at WO level
+                // (PO-level reservation is also disabled in ReleaseAsync)
                 _logger.LogInformation(
-                    "Cancelled ProductionOrder {OrderNumber} — Saga: returning reserved materials",
+                    "Cancelled ProductionOrder {OrderNumber} — PO-level return disabled, WO handles returns",
                     order.OrderNumber);
+            
             }
             else
             {
@@ -372,6 +447,8 @@ namespace MyERP.Services.Production.Services.ProductionOrders
                 {
                     ProductionOrderId = order.Id,
                     ProductionOrderNumber = order.OrderNumber,
+                    SalesOrderId = order.SalesOrderId,
+                    SalesOrderNumber = order.SalesOrderNumber,
                     Reason = reason
                 };
                 await _eventPublisher.PublishAsync(cancelEvent);
@@ -420,6 +497,8 @@ namespace MyERP.Services.Production.Services.ProductionOrders
                 ProductCode = order.ProductCode,
                 ProductName = order.ProductName,
                 BOMId = order.BOMId,
+                WorkCenterId = order.WorkCenterId,
+                WorkCenterName = order.WorkCenterName,
                 QuantityPlanned = order.QuantityPlanned,
                 QuantityGood = order.QuantityGood,
                 QuantityScrap = order.QuantityScrap,

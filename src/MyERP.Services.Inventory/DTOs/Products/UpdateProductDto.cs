@@ -7,5 +7,6 @@ namespace MyERP.Services.Inventory.DTOs.Products
         public decimal? Price { get; set; }
         public decimal? MinStockLevel { get; set; }
         public bool? IsActive { get; set; }
+        public Guid? DefaultStorageLocationId { get; set; }
     }
 }

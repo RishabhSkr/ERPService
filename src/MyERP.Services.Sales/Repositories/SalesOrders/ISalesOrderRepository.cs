@@ -13,5 +13,7 @@ namespace MyERP.Services.Sales.Repositories.SalesOrders
         Task<SalesOrder> AddAsync(SalesOrder order);
         Task UpdateAsync(SalesOrder order);
         Task<string> GenerateOrderNumberAsync();
+        Task<IEnumerable<SalesOrder>> GetActiveOrdersWithItemsAsync();
+
     }
 }

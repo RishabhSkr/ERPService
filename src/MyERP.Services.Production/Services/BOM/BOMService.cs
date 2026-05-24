@@ -73,7 +73,10 @@ namespace MyERP.Services.Production.Services.BOM
                     MaterialName = line.MaterialName,
                     Quantity = line.Quantity,
                     Unit = line.Unit,
-                    ScrapPercentage = line.ScrapPercentage
+                    ScrapPercentage = line.ScrapPercentage,
+                    ProcessId = line.ProcessId,
+                    ProcessCode = line.ProcessCode,
+                    ProcessName = line.ProcessName
                 }).ToList()
             };
 
@@ -109,10 +112,17 @@ namespace MyERP.Services.Production.Services.BOM
                         MaterialName = line.MaterialName,
                         Quantity = line.Quantity,
                         Unit = line.Unit,
-                        ScrapPercentage = line.ScrapPercentage
+                        ScrapPercentage = line.ScrapPercentage,
+                        ProcessId = line.ProcessId,
+                        ProcessCode = line.ProcessCode,
+                        ProcessName = line.ProcessName
                     });
                 }
             }
+
+            // Auto-increment version when lines change
+            if (dto.Lines != null)
+                bom.Version++;
 
             bom.UpdatedAt = DateTime.UtcNow;
             await _repository.UpdateAsync(bom);
@@ -154,7 +164,10 @@ namespace MyERP.Services.Production.Services.BOM
                     MaterialName = l.MaterialName,
                     Quantity = l.Quantity,
                     Unit = l.Unit,
-                    ScrapPercentage = l.ScrapPercentage
+                    ScrapPercentage = l.ScrapPercentage,
+                    ProcessId = l.ProcessId,
+                    ProcessCode = l.ProcessCode,
+                    ProcessName = l.ProcessName
                 }).ToList()
             };
         }

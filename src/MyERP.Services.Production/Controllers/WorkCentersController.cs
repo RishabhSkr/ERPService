@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Production.DTOs.WorkCenter;
 using MyERP.Services.Production.Middleware;
 using MyERP.Services.Production.Services.WorkCenter;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Production.Controllers
 {
     [ApiController]
     [Route("api/production/work-centers")]
+    [Authorize]
     public class WorkCentersController : ControllerBase
     {
         private readonly IWorkCenterService _service;

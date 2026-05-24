@@ -11,6 +11,7 @@ namespace MyERP.Services.Production.Repositories.ProcessRoute
         Task<bool> ExistsByCodeAsync(string routeCode);
         Task<Models.ProcessRoute> CreateAsync(Models.ProcessRoute entity);
         Task<Models.ProcessRoute> UpdateAsync(Models.ProcessRoute entity);
+        Task UpdateRouteAsync(Guid routeId, string routeCode, Guid productId, string? description, Guid workCenterId, List<DTOs.ProcessRoute.CreateProcessRouteStepDto> stepDtos);
         Task ClearStepsAsync(Models.ProcessRoute route);
     }
 }

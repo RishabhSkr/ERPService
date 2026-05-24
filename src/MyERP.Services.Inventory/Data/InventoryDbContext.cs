@@ -10,6 +10,8 @@ namespace MyERP.Services.Inventory.Data
         public DbSet<Category> Categories { get; set; }
         public DbSet<Unit> Units { get; set; }
         public DbSet<Warehouse> Warehouses { get; set; }
+        public DbSet<StorageLocation> StorageLocations { get; set; }
+        public DbSet<StorageLocationType> StorageLocationTypes { get; set; }
         public DbSet<Product> Products { get; set; }
         public DbSet<RawMaterial> RawMaterials { get; set; }
         public DbSet<ProductInventory> ProductInventories { get; set; }
@@ -51,6 +53,37 @@ namespace MyERP.Services.Inventory.Data
                 entity.Property(e => e.WarehouseName).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.WarehouseCode).IsRequired().HasMaxLength(20);
                 entity.HasIndex(e => e.WarehouseCode).IsUnique();
+            });
+
+            // ============================
+            // 3b. StorageLocation Config
+            // ============================
+            modelBuilder.Entity<StorageLocation>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.LocationCode).IsRequired().HasMaxLength(50);
+                entity.HasIndex(e => e.LocationCode).IsUnique();
+
+                entity.HasOne(d => d.Warehouse)
+                      .WithMany(p => p.StorageLocations)
+                      .HasForeignKey(d => d.WarehouseId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                      
+                entity.HasOne(d => d.LocationType)
+                      .WithMany(p => p.StorageLocations)
+                      .HasForeignKey(d => d.LocationTypeId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ============================
+            // 3c. StorageLocationType Config
+            // ============================
+            modelBuilder.Entity<StorageLocationType>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TypeCode).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.TypeName).IsRequired().HasMaxLength(100);
+                entity.HasIndex(e => e.TypeCode).IsUnique();
             });
 
             // ============================
@@ -114,13 +147,13 @@ namespace MyERP.Services.Inventory.Data
                       .HasForeignKey(d => d.ProductId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne(d => d.Warehouse)
+                entity.HasOne(d => d.StorageLocation)
                       .WithMany(p => p.ProductInventories)
-                      .HasForeignKey(d => d.WarehouseId)
+                      .HasForeignKey(d => d.StorageLocationId)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                // Unique constraint: One product per warehouse per batch
-                entity.HasIndex(e => new { e.ProductId, e.WarehouseId, e.BatchNumber }).IsUnique();
+                // Unique constraint: One product per location per batch
+                entity.HasIndex(e => new { e.ProductId, e.StorageLocationId, e.BatchNumber }).IsUnique();
             });
 
             // ============================
@@ -138,13 +171,13 @@ namespace MyERP.Services.Inventory.Data
                       .HasForeignKey(d => d.RawMaterialId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne(d => d.Warehouse)
+                entity.HasOne(d => d.StorageLocation)
                       .WithMany(p => p.RawMaterialInventories)
-                      .HasForeignKey(d => d.WarehouseId)
+                      .HasForeignKey(d => d.StorageLocationId)
                       .OnDelete(DeleteBehavior.Restrict);
 
                 // Unique constraint
-                entity.HasIndex(e => new { e.RawMaterialId, e.WarehouseId, e.BatchNumber }).IsUnique();
+                entity.HasIndex(e => new { e.RawMaterialId, e.StorageLocationId, e.BatchNumber }).IsUnique();
             });
 
             // ============================
@@ -161,9 +194,24 @@ namespace MyERP.Services.Inventory.Data
                 entity.Property(e => e.StockBefore).HasPrecision(18, 2);
                 entity.Property(e => e.StockAfter).HasPrecision(18, 2);
 
-                entity.HasOne(d => d.Warehouse)
+                entity.HasOne(d => d.FromWarehouse)
                       .WithMany()
-                      .HasForeignKey(d => d.WarehouseId)
+                      .HasForeignKey(d => d.FromWarehouseId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.FromLocation)
+                      .WithMany()
+                      .HasForeignKey(d => d.FromLocationId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.ToWarehouse)
+                      .WithMany()
+                      .HasForeignKey(d => d.ToWarehouseId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.ToLocation)
+                      .WithMany()
+                      .HasForeignKey(d => d.ToLocationId)
                       .OnDelete(DeleteBehavior.Restrict);
 
                 // Index for faster queries
@@ -207,6 +255,17 @@ namespace MyERP.Services.Inventory.Data
             // 3. Warehouse
             modelBuilder.Entity<Warehouse>().HasData(
                 new Warehouse { Id = warehouseMain, WarehouseName = "Main Warehouse", WarehouseCode = "WH-MAIN", Address = "123 Industrial Area", City = "Mumbai", IsActive = true, CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
+            );
+
+            // 4. StorageLocationType
+            var typeRm = Guid.Parse("d1111111-1111-1111-1111-111111111111");
+            var typeFg = Guid.Parse("d2222222-2222-2222-2222-222222222222");
+            var typeGen = Guid.Parse("d3333333-3333-3333-3333-333333333333");
+            
+            modelBuilder.Entity<StorageLocationType>().HasData(
+                new StorageLocationType { Id = typeRm, TypeCode = "RM", TypeName = "Raw Materials", AllowRawMaterials = true, AllowProducts = false, IsActive = true, CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new StorageLocationType { Id = typeFg, TypeCode = "FG", TypeName = "Finished Goods", AllowRawMaterials = false, AllowProducts = true, IsActive = true, CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new StorageLocationType { Id = typeGen, TypeCode = "GEN", TypeName = "General Storage", AllowRawMaterials = true, AllowProducts = true, IsActive = true, CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
             );
         }
     }

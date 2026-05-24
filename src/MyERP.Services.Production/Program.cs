@@ -50,6 +50,10 @@ using MyERP.Services.Production.Services.WorkCenter;
 using MyERP.Services.Production.Services.Equipment;
 using MyERP.Services.Production.Services.ProcessRoute;
 using MyERP.Services.Production.Services.WorkOrder;
+using MyERP.Services.Production.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using MyERP.Services.Production.HttpHandlers;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================================================
@@ -57,14 +61,15 @@ var builder = WebApplication.CreateBuilder(args);
 // ============================================================================
 // 📝 Industry Practice: Always use configuration, never hardcode
 builder.Services.AddDbContext<ProductionDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 var inventoryServiceUrl = builder.Configuration["Services:InventoryServiceUrl"] 
     ?? "http://localhost:5004";
+builder.Services.AddTransient<JwtDelegatingHandler>();
 builder.Services.AddHttpClient<IInventoryServiceClient, InventoryServiceClient>(client =>
 {
     client.BaseAddress = new Uri(inventoryServiceUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+}).AddHttpMessageHandler<JwtDelegatingHandler>();
 
 // ============================================================================
 // 2. CONTROLLERS + API DOCUMENTATION
@@ -94,12 +99,12 @@ var key = System.Text.Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
 
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
 })
 .AddJwtBearer(options =>
 {
-    options.TokenValidationParameters = new TokenValidationParameters
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
@@ -107,11 +112,20 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
+        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(key)
     };
 });
 
-builder.Services.AddAuthorization();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("DynamicPermission", policy =>
+    {
+        policy.Requirements.Add(new PermissionRequirement());
+    });
+});
 
 // ============================================================================
 // 5. DEPENDENCY INJECTION - REPOSITORIES
@@ -170,16 +184,15 @@ builder.Services.AddMassTransit(x =>
         .Endpoint(e => e.Name = "sales-order-created");  // Explicit queue name
     
     x.AddConsumer<StockReservedConsumer>();
+    x.AddConsumer<SalesOrderCancelledConsumer>()
+    .Endpoint(e => e.Name = "sales-order-cancelled");
     
-    // Configure RabbitMQ
-    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    // Configure RabbitMQ — URI-based config for CloudAMQP compatibility
+    var rabbitUri = builder.Configuration["RabbitMQ:Uri"]
+        ?? "amqp://guest:guest@localhost:5672/";
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host(rabbitHost, "/", h =>
-        {
-            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
-            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
-        });
+        cfg.Host(new Uri(rabbitUri));
         
         // Configure all endpoints (including our explicit "sales-order-created")
         cfg.ConfigureEndpoints(context);
@@ -212,6 +225,13 @@ builder.Services.AddCors(options =>
 // ============================================================================
 var app = builder.Build();
 
+// 🐳 Auto Migration
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ProductionDbContext>();
+    db.Database.Migrate();
+}
+
 // ============================================================================
 // MIDDLEWARE PIPELINE (Order matters!)
 // ============================================================================
@@ -239,6 +259,10 @@ app.MapControllers();
 // ============================================================================
 // 📝 Port allocation: 
 //    5001=Identity, 5002=Sales, 5003=SalesTutorial, 5004=Inventory, 5006=Production
-app.Urls.Add("http://localhost:5006");
+// Local dev mein custom port, Docker mein default 8080 use hota hai
+if (app.Environment.IsDevelopment())
+{
+    app.Urls.Add("http://localhost:5006");
+}
 
 app.Run();

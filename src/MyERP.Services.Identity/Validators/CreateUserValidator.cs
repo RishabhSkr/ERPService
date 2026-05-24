@@ -23,9 +23,6 @@ namespace MyERP.Services.Identity.Validators
                 .Matches(@"[0-9]").WithMessage("1 Number chahiye")
                 .Matches(@"[@$!%*?&#]").WithMessage("1 Special Char chahiye");
 
-            // RoleId GUID hai ab
-            RuleFor(x => x.RoleId)
-                .NotEmpty().WithMessage("Role select karna zaroori hai.");
         }
     }
 }

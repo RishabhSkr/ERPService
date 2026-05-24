@@ -1,3 +1,5 @@
+using MyERP.Services.Inventory.Models;
+
 namespace MyERP.Services.Inventory.Models
 {
     public class Warehouse
@@ -5,6 +7,7 @@ namespace MyERP.Services.Inventory.Models
         public Guid Id { get; set; }
         public string WarehouseName { get; set; } = string.Empty;
         public string WarehouseCode { get; set; } = string.Empty;
+        public WarehouseType Type { get; set; } = WarehouseType.Physical;
         public string? Address { get; set; }
         public string? City { get; set; }
         public bool IsActive { get; set; } = true;
@@ -14,5 +17,6 @@ namespace MyERP.Services.Inventory.Models
         // Navigation
         public ICollection<ProductInventory>? ProductInventories { get; set; }
         public ICollection<RawMaterialInventory>? RawMaterialInventories { get; set; }
+        public ICollection<StorageLocation>? StorageLocations { get; set; }
     }
 }

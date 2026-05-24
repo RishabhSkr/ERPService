@@ -17,8 +17,8 @@
        4. Keep EF.Design as build-only asset (PrivateAssets)
   -->
   <ItemGroup>
-    <!-- Database: Entity Framework Core with SQL Server -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.2" />
+    <!-- Database: Entity Framework Core with PostgreSQL -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -38,8 +38,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
 
-    <!-- Caching: Redis (for fast progress counters) -->
-    <PackageReference Include="StackExchange.Redis" Version="2.8.37" />
+
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MyERP.Shared\MyERP.Shared.csproj" />

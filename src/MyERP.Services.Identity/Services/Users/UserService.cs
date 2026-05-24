@@ -25,6 +25,8 @@ namespace MyERP.Services.Identity.Services.Users
                 Email = u.Email,
                 RoleId = u.RoleId,
                 RoleName = u.Role?.RoleName ?? "Unknown",
+                RequestedRoleId = u.RequestedRoleId,
+                Status = u.Status,
                 IsActive = u.IsActive,
                 CreatedAt = u.CreatedAt
             }).ToList();
@@ -42,6 +44,8 @@ namespace MyERP.Services.Identity.Services.Users
                 Email = user.Email,
                 RoleId = user.RoleId,
                 RoleName = user.Role?.RoleName ?? "Unknown",
+                RequestedRoleId = user.RequestedRoleId,
+                Status = user.Status,
                 IsActive = user.IsActive,
                 CreatedAt = user.CreatedAt
             };
@@ -95,6 +99,16 @@ namespace MyERP.Services.Identity.Services.Users
         public async Task DeleteUserAsync(Guid userId)
         {
             await _userRepo.DeleteAsync(userId);
+        }
+
+        public async Task ApproveUserAsync(Guid userId, Guid roleId)
+        {
+            await _userRepo.ApproveUserAsync(userId, roleId);
+        }
+
+        public async Task SuspendUserAsync(Guid userId)
+        {
+            await _userRepo.SuspendUserAsync(userId);
         }
     }
 }

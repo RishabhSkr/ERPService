@@ -14,6 +14,8 @@ namespace MyERP.Services.Inventory.DTOs.StockMovements
         public string? ReferenceType { get; set; }
         public Guid? ReferenceId { get; set; }
         public string? Notes { get; set; }
+        public string? FromLocationCode { get; set; }
+        public string? ToLocationCode { get; set; }
         public string? CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
     }

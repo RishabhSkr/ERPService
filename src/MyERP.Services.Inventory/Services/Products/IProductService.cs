@@ -12,6 +12,6 @@ namespace MyERP.Services.Inventory.Services.Products
         Task<bool> DeleteAsync(Guid id);
         Task<bool> RestoreAsync(Guid id);  // Restore soft-deleted product
         Task<ProductAvailabilityDto> CheckAvailabilityAsync(Guid productId, decimal quantity);
-        Task<bool> AddStockAsync(Guid productId, Guid warehouseId, decimal quantity, string? batchNumber = null);
+        Task<bool> UpdateProductInventoryAsync(Guid productId, Guid storageLocationId, decimal quantity, string? batchNumber = null);
     }
 }

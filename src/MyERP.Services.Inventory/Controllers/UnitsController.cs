@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Mvc;
 using MyERP.Services.Inventory.DTOs;
 using MyERP.Services.Inventory.DTOs.Units;
 using MyERP.Services.Inventory.Services.Units;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MyERP.Services.Inventory.Controllers
 {
     [ApiController]
     [Route("api/inventory/units")]
+    [Authorize]
     public class UnitsController : ControllerBase
     {
         private readonly IUnitService _unitService;

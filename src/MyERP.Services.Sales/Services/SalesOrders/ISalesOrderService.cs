@@ -10,5 +10,10 @@ namespace MyERP.Services.Sales.Services.SalesOrders
         Task<SalesOrderResponseDto> GetByIdAsync(Guid id);
         Task<SalesOrderResponseDto> UpdateStatusAsync(Guid id, UpdateOrderStatusDto dto);
         Task<bool> CancelAsync(Guid id, string? reason = null);
+        // Fulfillment
+        Task DispatchAsync(Guid orderId, DispatchRequestDto dto);
+        Task MarkDeliveredAsync(Guid orderId);
+        Task<List<FulfillmentDashboardDto>> GetFulfillmentDashboardAsync();
+
     }
 }

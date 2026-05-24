@@ -1,0 +1,37 @@
+# Build outputs — ** means match at ANY depth
+**/bin/
+**/obj/
+**/*.dll
+**/*.exe
+**/*.pdb
+**/*.nupkg
+
+# Development files
+.vs/
+.git/
+.gitignore
+.editorconfig
+
+# Docker files (don't copy Dockerfile into image)
+**/Dockerfile
+**/.dockerignore
+.docker/
+
+# User-specific files
+**/*.user
+**/*.suo
+
+# Temporary files
+**/*.tmp
+**/*.log
+
+# NuGet cache
+**/packages/
+
+# Node modules
+**/node_modules/
+
+# Documentation & test files
+**/*.md
+**/*.postman_collection.json
+**/*.postman_environment.json

@@ -6,6 +6,7 @@ using MyERP.Services.Inventory.Repositories.Categories;
 using MyERP.Services.Inventory.Repositories.Products;
 using MyERP.Services.Inventory.Repositories.Units;
 using MyERP.Services.Inventory.Repositories.Warehouses;
+using System.Text.Json;
 
 namespace MyERP.Services.Inventory.Services.Products
 {
@@ -15,17 +16,20 @@ namespace MyERP.Services.Inventory.Services.Products
         private readonly ICategoryRepository _categoryRepository;
         private readonly IUnitRepository _unitRepository;
         private readonly IWarehouseRepository _warehouseRepository;
+        private readonly IStorageLocationRepository _locationRepository;
 
         public ProductService(
             IProductRepository productRepository,
             ICategoryRepository categoryRepository,
             IUnitRepository unitRepository,
-            IWarehouseRepository warehouseRepository)
+            IWarehouseRepository warehouseRepository,
+            IStorageLocationRepository locationRepository)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _unitRepository = unitRepository;
             _warehouseRepository = warehouseRepository;
+            _locationRepository = locationRepository;
         }
 
         public async Task<ProductResponseDto> CreateAsync(CreateProductDto dto)
@@ -45,6 +49,15 @@ namespace MyERP.Services.Inventory.Services.Products
             if (!unitExists)
                 throw new NotFoundException("Unit", dto.UnitId);
 
+            if (dto.DefaultStorageLocationId.HasValue)
+            {
+                var loc = await _locationRepository.GetByIdAsync(dto.DefaultStorageLocationId.Value);
+                if (loc == null)
+                    throw new NotFoundException("StorageLocation", dto.DefaultStorageLocationId.Value);
+                if (loc.LocationType != null && !loc.LocationType.AllowProducts)
+                    throw new BadRequestException($"Storage Location '{loc.LocationCode}' does not allow storing Finished Goods. Its type is '{loc.LocationType.TypeName}'.");
+            }
+
             var product = new Product
             {
                 Id = Guid.NewGuid(),
@@ -55,6 +68,7 @@ namespace MyERP.Services.Inventory.Services.Products
                 UnitId = dto.UnitId,
                 Price = dto.Price,
                 MinStockLevel = dto.MinStockLevel,
+                DefaultStorageLocationId = dto.DefaultStorageLocationId,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -85,7 +99,21 @@ namespace MyERP.Services.Inventory.Services.Products
                 ReservedStock = p.ProductInventories?.Sum(i => i.ReservedStock) ?? 0,
                 AvailableStock = p.ProductInventories?.Sum(i => i.CurrentStock - i.ReservedStock) ?? 0,
                 UnitName = p.Unit?.UnitName ?? "",
-                IsActive = p.IsActive
+                MinStockLevel = p.MinStockLevel,
+                DefaultStorageLocationId = p.DefaultStorageLocationId,
+                DefaultStorageLocationCode = p.DefaultStorageLocation?.LocationCode,
+                IsActive = p.IsActive,
+                LocationStocks = p.ProductInventories?
+                    .Where(i => i.CurrentStock > 0 || i.ReservedStock > 0)
+                    .Select(i => new LocationStockDto
+                    {
+                        StorageLocationId = i.StorageLocationId,
+                        LocationCode = i.StorageLocation?.LocationCode ?? "",
+                        WarehouseName = i.Warehouse?.WarehouseName ?? "",
+                        CurrentStock = i.CurrentStock,
+                        ReservedStock = i.ReservedStock,
+                        AvailableStock = i.AvailableStock
+                    }).ToList() ?? new()
             }).ToList();
 
             return new PagedResponse<ProductListDto>(data, pageNumber, pageSize, totalCount);
@@ -117,6 +145,23 @@ namespace MyERP.Services.Inventory.Services.Products
 
             if (dto.MinStockLevel.HasValue)
                 product.MinStockLevel = dto.MinStockLevel.Value;
+
+            if (dto.DefaultStorageLocationId.HasValue)
+            {
+                var loc = await _locationRepository.GetByIdAsync(dto.DefaultStorageLocationId.Value);
+
+                if (loc == null)
+                    throw new NotFoundException("StorageLocation", dto.DefaultStorageLocationId.Value);
+
+                if (loc.LocationType != null && !loc.LocationType.AllowProducts)
+                    throw new BadRequestException($"Storage Location '{loc.LocationCode}' does not allow storing Finished Goods. Its type is '{loc.LocationType.TypeName}'.");
+
+                product.DefaultStorageLocationId = dto.DefaultStorageLocationId.Value;
+            }
+            else
+            {
+                product.DefaultStorageLocationId = null;
+            }
 
             if (dto.IsActive.HasValue)
                 product.IsActive = dto.IsActive.Value;
@@ -180,41 +225,49 @@ namespace MyERP.Services.Inventory.Services.Products
             };
         }
 
-        public async Task<bool> AddStockAsync(Guid productId, Guid warehouseId, decimal quantity, string? batchNumber = null)
+       public async Task<bool> UpdateProductInventoryAsync(Guid productId, Guid storageLocationId, decimal quantity, string? batchNumber = null)
         {
             var productExists = await _productRepository.ExistsAsync(productId);
             if (!productExists)
                 throw new NotFoundException("Product", productId);
 
-            var warehouseExists = await _warehouseRepository.ExistsAsync(warehouseId);
-            if (!warehouseExists)
-                throw new NotFoundException("Warehouse", warehouseId);
+            var location = await _locationRepository.GetByIdAsync(storageLocationId);
+            if (location == null)
+                throw new NotFoundException("StorageLocation", storageLocationId);
 
-            // Find or create inventory record
-            var inventory = await _productRepository.GetInventoryAsync(productId, warehouseId, batchNumber);
+            // 1. Find existing inventory
+            var inventory = await _productRepository.GetInventoryAsync(productId, storageLocationId, batchNumber);
 
+            // 2. Logic: Create New or Set (Adjust) Existing
             if (inventory == null)
             {
+                // Naya record banana, initial exact quantity set karna
                 inventory = new ProductInventory
                 {
                     Id = Guid.NewGuid(),
                     ProductId = productId,
-                    WarehouseId = warehouseId,
-                    CurrentStock = 0,
+                    WarehouseId = location.WarehouseId,
+                    StorageLocationId = storageLocationId,
+                    CurrentStock = quantity,  // Seedha exact quantity set kar rahe hain
                     ReservedStock = 0,
                     BatchNumber = batchNumber,
                     CreatedAt = DateTime.UtcNow
                 };
-                await _productRepository.AddInventoryAsync(inventory);
+                
+                await _productRepository.AddProductInventoryAsync(inventory);
             }
+            else
+            {
+                // Purana record mil gaya, ab uski quantity overwrite (adjust) karni hai
+                inventory.CurrentStock = quantity; // Yahan += nahi, sirf = use kiya hai
+                inventory.UpdatedAt = DateTime.UtcNow;
 
-            inventory.CurrentStock += quantity;
-            inventory.UpdatedAt = DateTime.UtcNow;
-            await _productRepository.UpdateInventoryAsync(inventory);
+                await _productRepository.UpdateInventoryAsync(inventory);
+            }
 
             return true;
         }
-
+    
         private static ProductResponseDto MapToDto(Product product)
         {
             var inventories = product.ProductInventories ?? new List<ProductInventory>();

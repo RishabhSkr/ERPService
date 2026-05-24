@@ -36,6 +36,9 @@ namespace MyERP.Services.Production.DTOs.BOM
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "pcs";
         public decimal ScrapPercentage { get; set; } = 0;
+        public Guid? ProcessId { get; set; }
+        public string? ProcessCode { get; set; }
+        public string? ProcessName { get; set; }
     }
 
     /// <summary>
@@ -56,6 +59,9 @@ namespace MyERP.Services.Production.DTOs.BOM
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "pcs";
         public decimal ScrapPercentage { get; set; } = 0;
+        public Guid? ProcessId { get; set; }
+        public string? ProcessCode { get; set; }
+        public string? ProcessName { get; set; }
     }
 
     // ====================================
@@ -88,5 +94,8 @@ namespace MyERP.Services.Production.DTOs.BOM
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = string.Empty;
         public decimal ScrapPercentage { get; set; }
+        public Guid? ProcessId { get; set; }
+        public string? ProcessCode { get; set; }
+        public string? ProcessName { get; set; }
     }
 }

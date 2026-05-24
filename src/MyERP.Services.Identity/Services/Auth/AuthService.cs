@@ -24,13 +24,17 @@ namespace MyERP.Services.Identity.Services
         {
             // 1. Get User
             var user = await _userRepo.GetByUsernameAsync(request.Username);
-            if (user == null) // Don't check password here to avoid timing attacks? Actually standard is verify.
-            {
-                 // Dummy verify to simulate time if needed, but for now simple check.
-            }
+           
              if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 throw new UnauthorizedException("Invalid Credentials");
 
+            // check if user is active
+            if (user.Status == SystemConstants.StatusPending)
+                throw new UnauthorizedException("Your account is not yet approved. Please contact your administrator.");
+            
+            if(user.Status == SystemConstants.StatusSuspended)
+                throw new UnauthorizedException("Your account has been suspended. Please contact your administrator.");
+            
             // 2. Generate Access Token
             string roleName = user.Role?.RoleName ?? "User";
             string accessToken = _tokenService.GenerateToken(user, roleName);
@@ -68,7 +72,9 @@ namespace MyERP.Services.Identity.Services
                 Username = request.Username,
                 Email = request.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                RoleId = request.RoleId, // Now a Guid
+                RoleId = SystemConstants.PendingRoleId, // Force Pending
+                RequestedRoleId = request.RoleId != Guid.Empty ? request.RoleId : null, // Save what they asked for
+                Status = SystemConstants.StatusPending, // Force Pending status
                 IsActive = true
             };
 

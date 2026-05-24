@@ -15,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1. Database Connection Register karein
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Controllers Add karein
 builder.Services.AddControllers();
@@ -60,6 +60,13 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 // builder.Services.AddSingleton<IAuthorizationHandler, AccessControlHandler>(); // Removed in favor of Middleware
 var app = builder.Build();
+
+// 🐳 Auto Migration — Docker mein pehli baar database auto-create hoga
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 
 // 4. Pipeline Setup
 if (app.Environment.IsDevelopment())
