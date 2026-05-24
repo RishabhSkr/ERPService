@@ -3,9 +3,14 @@
 ##
 *.json
 *.yaml
+!erp-frontend/vercel.json
+!erp-frontend/package.json
+!erp-frontend/package-lock.json
+!render.yaml
+!**/appsettings*.json
+!**/Migrations/**
 explain_code_flow.md
 Properties/
-Migrations/
 # User-specific files
 *.rsuser
 *.suo

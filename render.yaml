@@ -1,0 +1,151 @@
+# ============================================
+# MyERP Render Blueprint — Infrastructure as Code
+# Usage: Push to GitHub → Connect to Render → Auto-deploy
+# ============================================
+
+services:
+  # ═══════════════════════════════════════
+  # 🚪 API GATEWAY (YARP Reverse Proxy)
+  # ═══════════════════════════════════════
+  - type: web
+    name: myerp-gateway
+    runtime: docker
+    dockerfilePath: ./src/MyERP.Gateway/Dockerfile
+    dockerContext: ./src
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false  # Set manually in Render Dashboard
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: MyERP_Identity
+      - key: Jwt__Audience
+        value: MyERP_Clients
+      - key: ReverseProxy__Clusters__identity-cluster__Destinations__destination1__Address
+        fromService:
+          name: myerp-identity
+          type: web
+          property: hostport
+      - key: ReverseProxy__Clusters__sales-cluster__Destinations__destination1__Address
+        fromService:
+          name: myerp-sales
+          type: web
+          property: hostport
+      - key: ReverseProxy__Clusters__inventory-cluster__Destinations__destination1__Address
+        fromService:
+          name: myerp-inventory
+          type: web
+          property: hostport
+      - key: ReverseProxy__Clusters__production-cluster__Destinations__destination1__Address
+        fromService:
+          name: myerp-production
+          type: web
+          property: hostport
+
+  # ═══════════════════════════════════════
+  # 🔐 IDENTITY SERVICE
+  # ═══════════════════════════════════════
+  - type: web
+    name: myerp-identity
+    runtime: docker
+    dockerfilePath: ./src/MyERP.Services.Identity/Dockerfile
+    dockerContext: ./src
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: MyERP_Identity
+      - key: Jwt__Audience
+        value: MyERP_Clients
+
+  # ═══════════════════════════════════════
+  # 📊 SALES SERVICE
+  # ═══════════════════════════════════════
+  - type: web
+    name: myerp-sales
+    runtime: docker
+    dockerfilePath: ./src/MyERP.Services.Sales/Dockerfile
+    dockerContext: ./src
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: MyERP_Identity
+      - key: Jwt__Audience
+        value: MyERP_Clients
+      - key: RabbitMQ__Uri
+        sync: false
+      - key: Services__InventoryServiceUrl
+        fromService:
+          name: myerp-inventory
+          type: web
+          property: hostport
+      - key: Services__IdentityService__BaseUrl
+        fromService:
+          name: myerp-identity
+          type: web
+          property: hostport
+
+  # ═══════════════════════════════════════
+  # 📦 INVENTORY SERVICE
+  # ═══════════════════════════════════════
+  - type: web
+    name: myerp-inventory
+    runtime: docker
+    dockerfilePath: ./src/MyERP.Services.Inventory/Dockerfile
+    dockerContext: ./src
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: MyERP_Identity
+      - key: Jwt__Audience
+        value: MyERP_Clients
+      - key: RabbitMQ__Uri
+        sync: false
+
+  # ═══════════════════════════════════════
+  # 🏭 PRODUCTION SERVICE
+  # ═══════════════════════════════════════
+  - type: web
+    name: myerp-production
+    runtime: docker
+    dockerfilePath: ./src/MyERP.Services.Production/Dockerfile
+    dockerContext: ./src
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Jwt__Key
+        sync: false
+      - key: Jwt__Issuer
+        value: MyERP_Identity
+      - key: Jwt__Audience
+        value: MyERP_Clients
+      - key: RabbitMQ__Uri
+        sync: false
+      - key: Services__InventoryServiceUrl
+        fromService:
+          name: myerp-inventory
+          type: web
+          property: hostport
