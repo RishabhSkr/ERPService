@@ -21,7 +21,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // 1. Database Connection
 builder.Services.AddDbContext<SalesDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Controllers
 builder.Services.AddControllers();
@@ -104,15 +104,12 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<ProductionCancelledConsumer>()
     .Endpoint(e => e.Name = "sales-production-cancelled");
 
-    // Configure RabbitMQ
-    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    // Configure RabbitMQ — URI-based config for CloudAMQP compatibility
+    var rabbitUri = builder.Configuration["RabbitMQ:Uri"]
+        ?? "amqp://guest:guest@localhost:5672/";
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host(rabbitHost, "/", h =>
-        {
-            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
-            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
-        });
+        cfg.Host(new Uri(rabbitUri));
         // Auto-configure endpoints (DLQ automatic!)
         cfg.ConfigureEndpoints(context);
     });

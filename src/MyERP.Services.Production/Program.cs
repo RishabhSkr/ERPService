@@ -61,7 +61,7 @@ var builder = WebApplication.CreateBuilder(args);
 // ============================================================================
 // 📝 Industry Practice: Always use configuration, never hardcode
 builder.Services.AddDbContext<ProductionDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 var inventoryServiceUrl = builder.Configuration["Services:InventoryServiceUrl"] 
     ?? "http://localhost:5004";
 builder.Services.AddTransient<JwtDelegatingHandler>();
@@ -187,15 +187,12 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<SalesOrderCancelledConsumer>()
     .Endpoint(e => e.Name = "sales-order-cancelled");
     
-    // Configure RabbitMQ
-    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    // Configure RabbitMQ — URI-based config for CloudAMQP compatibility
+    var rabbitUri = builder.Configuration["RabbitMQ:Uri"]
+        ?? "amqp://guest:guest@localhost:5672/";
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host(rabbitHost, "/", h =>
-        {
-            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
-            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
-        });
+        cfg.Host(new Uri(rabbitUri));
         
         // Configure all endpoints (including our explicit "sales-order-created")
         cfg.ConfigureEndpoints(context);

@@ -44,7 +44,7 @@ namespace MyERP.Services.Identity.Data
             // ============================
             modelBuilder.Entity<User>(entity =>
             {
-                entity.HasKey(e => e.Id); 
+                entity.HasKey(e => e.Id);
                 entity.Property(e => e.Username).IsRequired().HasMaxLength(50);
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue(SystemConstants.StatusPending);
                 entity.HasIndex(e => e.Username).IsUnique();
@@ -61,7 +61,7 @@ namespace MyERP.Services.Identity.Data
             modelBuilder.Entity<RefreshToken>(entity =>
             {
                 entity.HasKey(e => e.Id); // PK is Guid
-                
+
                 entity.HasOne(d => d.User)
                       .WithMany(p => p.RefreshTokens)
                       .HasForeignKey(d => d.UserId)
@@ -71,13 +71,15 @@ namespace MyERP.Services.Identity.Data
             // ============================
             // 4. Role & Module Config
             // ============================
-            modelBuilder.Entity<Role>(e => {
+            modelBuilder.Entity<Role>(e =>
+            {
                 e.HasKey(x => x.Id);
                 e.Property(x => x.RoleName).IsRequired().HasMaxLength(50);
                 e.HasIndex(x => x.RoleName).IsUnique();
             });
 
-            modelBuilder.Entity<Module>(e => {
+            modelBuilder.Entity<Module>(e =>
+            {
                 e.HasKey(x => x.Id);
                 e.Property(x => x.ModuleName).IsRequired().HasMaxLength(50);
                 e.HasIndex(x => x.ModuleCode).IsUnique();
@@ -103,14 +105,14 @@ namespace MyERP.Services.Identity.Data
                 new Role { Id = SystemConstants.PendingRoleId, RoleName = SystemConstants.RolePending, Description = "Awaiting admin approval — no access", IsActive = true, IsSystemRole = true }
             );
 
-            // 2. SuperAdmin User (Password: Admin@123)
+            // 2. SuperAdmin User 
             // This is the ONLY user that can bootstrap the system
             modelBuilder.Entity<User>().HasData(new User
             {
                 Id = SystemConstants.SuperAdminUserId,
                 Username = "admin",
                 Email = "admin@myerp.com",
-                PasswordHash = "$2a$11$pGW6fhGlCDRZ/BxSmsQagew/WRoFmX5eHPSVXml7dYtux6o.5LluC", // Admin@123 
+                PasswordHash = "$2a$11$pGW6fhGlCDRZ/BxSmsQagew/WRoFmX5eHPSVXml7dYtux6o.5LluC",
                 RoleId = SystemConstants.SuperAdminRoleId,
                 Status = SystemConstants.StatusActive,
                 IsActive = true,

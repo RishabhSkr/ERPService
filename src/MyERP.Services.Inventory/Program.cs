@@ -30,15 +30,12 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<MaterialReturnRequestedConsumer>();
     x.AddConsumer<BatchConcludedConsumer>();
     
-    // Configure RabbitMQ
-    var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+    // Configure RabbitMQ — URI-based config for CloudAMQP compatibility
+    var rabbitUri = builder.Configuration["RabbitMQ:Uri"]
+        ?? "amqp://guest:guest@localhost:5672/";
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host(rabbitHost, "/", h =>
-        {
-            h.Username(builder.Configuration["RabbitMQ:UserName"] ?? "guest");
-            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
-        });
+        cfg.Host(new Uri(rabbitUri));
         
         // Configure all endpoints (including our explicit "sales-order-created")
         cfg.ConfigureEndpoints(context);
@@ -51,7 +48,7 @@ builder.Services.AddMassTransit(x =>
 
 // 1. Database Connection
 builder.Services.AddDbContext<InventoryDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Controllers
 builder.Services.AddControllers();
