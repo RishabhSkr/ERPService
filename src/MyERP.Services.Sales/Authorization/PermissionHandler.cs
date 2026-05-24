@@ -58,7 +58,10 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
 
             // 3. Call Identity Service to check permission
             var client = _httpClientFactory.CreateClient();
-            var identityUrl = _configuration["Services[IdentityService]:BaseUrl"] ?? "http://localhost:5205";
+            client.Timeout = TimeSpan.FromSeconds(10); // Render cold start timeout
+            var identityUrl = _configuration["Services:IdentityService:BaseUrl"] ?? "http://localhost:5205";
+
+            _logger.LogInformation("📡 Calling Identity Service at: {IdentityUrl}", identityUrl);
 
             var checkRequest = new
             {
@@ -94,6 +97,16 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
                 _logger.LogError("❌ Identity Service returned {StatusCode}", response.StatusCode);
                 context.Fail();
             }
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "⚠️ Identity Service unreachable at configured URL. Check Services__IdentityService__BaseUrl env var on Render.");
+            context.Fail();
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogError(ex, "⚠️ Identity Service timeout (cold start?). Will retry on next request.");
+            context.Fail();
         }
         catch (Exception ex)
         {
