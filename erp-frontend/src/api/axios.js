@@ -12,7 +12,7 @@ const createApiInstance = (baseURL, serviceName) => {
             'Content-Type': 'application/json',
             'ngrok-skip-browser-warning': '69420'
         },
-        timeout: 10000,
+        timeout: 60000, // 60s — Render free tier cold start takes ~50s
     });
 
     instance.interceptors.request.use((config) => {
