@@ -94,6 +94,7 @@ app.UseMiddleware<AccessControlMiddleware>();
 // 5. Map reverse proxy routes
 app.MapReverseProxy();
 
-
+// Health check endpoint — keeps Render service awake via external pinger
+app.MapGet("/healthz", () => Results.Ok(new { status = "healthy", service = "gateway", time = DateTime.UtcNow }));
 
 app.Run();

@@ -84,4 +84,7 @@ app.UseMiddleware<AccessControlMiddleware>();
 
 app.MapControllers();
 
+// Health check endpoint — keeps Render service awake via external pinger
+app.MapGet("/healthz", () => Results.Ok(new { status = "healthy", service = "identity", time = DateTime.UtcNow }));
+
 app.Run();

@@ -193,7 +193,14 @@ builder.Services.AddMassTransit(x =>
     x.UsingRabbitMq((context, cfg) =>
     {
         cfg.Host(new Uri(rabbitUri));
-        
+
+        // Retry policy — handles cold starts & transient failures
+        cfg.UseMessageRetry(r => r.Intervals(
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(10)
+        ));
+
         // Configure all endpoints (including our explicit "sales-order-created")
         cfg.ConfigureEndpoints(context);
         
@@ -253,6 +260,9 @@ app.UseMiddleware<GlobalExceptionMiddleware>();  // Custom error handling
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Health check endpoint — keeps Render service awake via external pinger
+app.MapGet("/healthz", () => Results.Ok(new { status = "healthy", service = "production", time = DateTime.UtcNow }));
 
 // ============================================================================
 // SET PORT AND RUN
