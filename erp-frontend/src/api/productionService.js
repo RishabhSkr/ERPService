@@ -19,7 +19,7 @@ export const cancelRequest = (id, data) => productionApi.post(`/production/pendi
 // ====================================================================
 
 export const getAllOrders = () => productionApi.get('/production/orders');
-export const getAllPendingOrders = () => productionApi.get('/production/pending-requests/');
+export const getAllPendingOrders = () => productionApi.get('/production/pending-requests');
 export const getOrdersByStatus = (status) => productionApi.get(`/production/orders/status/${status}`);
 export const getOrderById = (id) => productionApi.get(`/production/orders/${id}`);
 export const createOrder = (data) => productionApi.post('/production/orders/create', data);
