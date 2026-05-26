@@ -53,7 +53,7 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
             var endpoint = httpContext.Request.Path.Value ?? "";
             var method = httpContext.Request.Method;
 
-            _logger.LogInformation("🔐 Checking permission: Role={RoleName} Endpoint={Endpoint} Method={Method}", 
+            _logger.LogInformation("ðŸ” Checking permission: Role={RoleName} Endpoint={Endpoint} Method={Method}", 
                 roleClaim.Value, endpoint, method);
 
             // 3. Call Identity Service to check permission
@@ -61,7 +61,7 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
             client.Timeout = TimeSpan.FromSeconds(10); // Render cold start timeout
             var identityUrl = _configuration["Services:IdentityService:BaseUrl"] ?? "http://localhost:5205";
 
-            _logger.LogInformation("📡 Calling Identity Service at: {IdentityUrl}", identityUrl);
+            _logger.LogInformation("ðŸ“¡ Calling Identity Service at: {IdentityUrl}", identityUrl);
 
             var checkRequest = new
             {
@@ -83,29 +83,29 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
 
                 if (result?.Data?.HasAccess == true)
                 {
-                    _logger.LogInformation("✅ Permission GRANTED for {Endpoint}", endpoint);
+                    _logger.LogInformation("âœ… Permission GRANTED for {Endpoint}", endpoint);
                     context.Succeed(requirement);
                 }
                 else
                 {
-                    _logger.LogWarning("❌ Permission DENIED for {Endpoint}", endpoint);
+                    _logger.LogWarning("âŒ Permission DENIED for {Endpoint}", endpoint);
                     context.Fail();
                 }
             }
             else
             {
-                _logger.LogError("❌ Identity Service returned {StatusCode}", response.StatusCode);
+                _logger.LogError("âŒ Identity Service returned {StatusCode}", response.StatusCode);
                 context.Fail();
             }
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "⚠️ Identity Service unreachable at configured URL. Check Services__IdentityService__BaseUrl env var on Render.");
+            _logger.LogError(ex, "âš ï¸ Identity Service unreachable at configured URL. Check Services__IdentityService__BaseUrl env var on Render.");
             context.Fail();
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogError(ex, "⚠️ Identity Service timeout (cold start?). Will retry on next request.");
+            _logger.LogError(ex, "âš ï¸ Identity Service timeout (cold start?). Will retry on next request.");
             context.Fail();
         }
         catch (Exception ex)

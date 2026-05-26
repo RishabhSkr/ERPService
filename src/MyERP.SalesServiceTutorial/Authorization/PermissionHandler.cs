@@ -53,7 +53,7 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
             var endpoint = httpContext.Request.Path.Value ?? "";
             var method = httpContext.Request.Method;
 
-            _logger.LogInformation("🔐 Checking permission: Role={RoleName} Endpoint={Endpoint} Method={Method}", 
+            _logger.LogInformation("ðŸ” Checking permission: Role={RoleName} Endpoint={Endpoint} Method={Method}", 
                 roleClaim.Value, endpoint, method);
 
             // 3. Call Identity Service to check permission
@@ -80,18 +80,18 @@ public class PermissionHandler : AuthorizationHandler<PermissionRequirement>
 
                 if (result?.Data?.HasAccess == true)
                 {
-                    _logger.LogInformation("✅ Permission GRANTED for {Endpoint}", endpoint);
+                    _logger.LogInformation("âœ… Permission GRANTED for {Endpoint}", endpoint);
                     context.Succeed(requirement);
                 }
                 else
                 {
-                    _logger.LogWarning("❌ Permission DENIED for {Endpoint}", endpoint);
+                    _logger.LogWarning("âŒ Permission DENIED for {Endpoint}", endpoint);
                     context.Fail();
                 }
             }
             else
             {
-                _logger.LogError("❌ Identity Service returned {StatusCode}", response.StatusCode);
+                _logger.LogError("âŒ Identity Service returned {StatusCode}", response.StatusCode);
                 context.Fail();
             }
         }

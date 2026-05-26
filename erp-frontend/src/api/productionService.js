@@ -45,6 +45,7 @@ export const getWOPlanningInfo = (poId) => productionApi.get(`/production/work-o
 export const createWorkOrder = (data) => productionApi.post('/production/work-orders/create', data);
 export const getWorkOrdersByPO = (poId) => productionApi.get(`/production/orders/${poId}/work-orders`);
 export const generateWorkOrders = (poId) => productionApi.post(`/production/orders/${poId}/generate-work-orders`);
+export const generateRouteWOs = (data) => productionApi.post('/production/work-orders/generate-route', data);
 
 // WO Lifecycle
 export const releaseWO = (woId) => productionApi.patch(`/production/work-orders/${woId}/release`);
@@ -112,6 +113,7 @@ export const getProcessRouteById = (id) => productionApi.get(`/production/proces
 export const getProcessRouteByProduct = (productId) => productionApi.get(`/production/process-routes/product/${productId}`);
 export const createProcessRoute = (data) => productionApi.post('/production/process-routes', data);
 export const updateProcessRoute = (id, data) => productionApi.put(`/production/process-routes/${id}`, data);
+export const deleteProcessRoute = (id) => productionApi.delete(`/production/process-routes/${id}`);
 
 
 // ====================================================================

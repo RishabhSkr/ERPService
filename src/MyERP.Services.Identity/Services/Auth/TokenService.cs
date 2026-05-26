@@ -19,8 +19,8 @@ namespace MyERP.Services.Identity.Services.Auth
         public string GenerateToken(UserEntity user, string roleName)
         {
             var jwtKey = _config["Jwt:Key"]??"";
-            Console.WriteLine($"🔑 Identity JWT Key (first 10 chars): {jwtKey.Substring(0, Math.Min(10, jwtKey.Length))}...");
-            Console.WriteLine($"🔑 Identity JWT Key Length: {jwtKey.Length}");
+            Console.WriteLine($"ðŸ”‘ Identity JWT Key (first 10 chars): {jwtKey.Substring(0, Math.Min(10, jwtKey.Length))}...");
+            Console.WriteLine($"ðŸ”‘ Identity JWT Key Length: {jwtKey.Length}");
             
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

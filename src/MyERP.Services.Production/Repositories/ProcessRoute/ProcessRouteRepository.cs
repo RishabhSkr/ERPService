@@ -26,6 +26,15 @@ namespace MyERP.Services.Production.Repositories.ProcessRoute
                 .Include(r => r.Steps).ThenInclude(s => s.Equipment)
                 .FirstOrDefaultAsync(r => r.ProductId == productId && r.IsActive);
 
+        public async Task<List<Models.ProcessRoute>> GetAllActiveByProductIdAsync(Guid productId) =>
+            await _context.ProcessRoutes
+                .Include(r => r.WorkCenter)
+                .Include(r => r.Steps.OrderBy(s => s.StepNumber)).ThenInclude(s => s.Process)
+                .Include(r => r.Steps).ThenInclude(s => s.Equipment)
+                .Where(r => r.ProductId == productId && r.IsActive)
+                .OrderBy(r => r.RouteCode)
+                .ToListAsync();
+
         public async Task<IEnumerable<Models.ProcessRoute>> GetAllAsync() =>
             await _context.ProcessRoutes
                 .Include(r => r.WorkCenter)

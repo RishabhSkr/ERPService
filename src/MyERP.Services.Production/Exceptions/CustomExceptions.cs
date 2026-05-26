@@ -1,10 +1,10 @@
 /*
  * Custom Exceptions
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: throw new Exception("Not found")
- * ✅ INDUSTRY:
+ * âŒ NOOB: throw new Exception("Not found")
+ * âœ… INDUSTRY:
  *    1. Custom exception types for different scenarios
  *    2. Middleware catches and converts to proper HTTP responses
  *    3. Consistent error format across all APIs

@@ -1,10 +1,10 @@
 /*
  * BOM (Bill of Materials) - Manufacturing Recipe
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: One big table with all data, no versioning
- * ✅ INDUSTRY:
+ * âŒ NOOB: One big table with all data, no versioning
+ * âœ… INDUSTRY:
  *    1. Header + Lines pattern (normalized)
  *    2. Version control (can update recipe without losing history)
  *    3. IsActive flag (soft activate/deactivate)
@@ -24,25 +24,25 @@ namespace MyERP.Services.Production.Models
         
         /// <summary>
         /// ProductId from Inventory Service - what we're making
-        /// 📝 Industry: Store only ID, not full product data (microservices boundary)
+        /// ðŸ“ Industry: Store only ID, not full product data (microservices boundary)
         /// </summary>
         public Guid ProductId { get; set; }
         
         /// <summary>
         /// Human-readable code: BOM-CHAIR-001
-        /// 📝 Industry: Unique code for business users, separate from GUID
+        /// ðŸ“ Industry: Unique code for business users, separate from GUID
         /// </summary>
         public string BomCode { get; set; } = string.Empty;
         
         /// <summary>
         /// Denormalized product name for display
-        /// 📝 Industry: Copy at creation time, avoids cross-service calls for display
+        /// ðŸ“ Industry: Copy at creation time, avoids cross-service calls for display
         /// </summary>
         public string ProductName { get; set; } = string.Empty;
         
         /// <summary>
         /// Version number: 1, 2, 3...
-        /// 📝 Industry: When recipe changes, create new version instead of editing
+        /// ðŸ“ Industry: When recipe changes, create new version instead of editing
         /// </summary>
         public int Version { get; set; } = 1;
         

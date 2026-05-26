@@ -17,7 +17,10 @@ namespace MyERP.Services.Production.Repositories.Equipment
                 .FirstOrDefaultAsync(e => e.EquipmentId == id);
 
         public async Task<IEnumerable<Models.Equipment>> GetAllAsync() =>
-            await _context.Equipment.Include(e => e.WorkCenter)
+            await _context.Equipment
+                .Include(e => e.WorkCenter)
+                .Include(e => e.EquipmentProcesses)
+                    .ThenInclude(ep => ep.Process)
                 .OrderBy(e => e.EquipmentCode).ToListAsync();
 
         public async Task<IEnumerable<Models.Equipment>> GetByWorkCenterAsync(Guid workCenterId) =>

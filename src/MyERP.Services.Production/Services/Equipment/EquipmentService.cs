@@ -36,7 +36,23 @@ namespace MyERP.Services.Production.Services.Equipment
         public async Task<IEnumerable<EquipmentDto>> GetAllAsync()
         {
             var entities = await _repository.GetAllAsync();
-            return entities.Select(MapToDto);
+            return entities.Select(e =>
+            {
+                var dto = MapToDto(e);
+                dto.LinkedProcesses = (e.EquipmentProcesses ?? Enumerable.Empty<Models.EquipmentProcess>())
+                    .Where(ep => ep.Process != null)
+                    .Select(ep => new ProcessDto
+                    {
+                        ProcessId = ep.Process!.ProcessId,
+                        ProcessCode = ep.Process.ProcessCode,
+                        ProcessName = ep.Process.ProcessName,
+                        Category = ep.Process.Category,
+                        StandardTimeMinutes = ep.Process.StandardTimeMinutes,
+                        Description = ep.Process.Description,
+                        IsActive = ep.Process.IsActive
+                    }).ToList();
+                return dto;
+            }).ToList();
         }
 
         public async Task<IEnumerable<EquipmentDto>> GetByWorkCenterAsync(Guid workCenterId)

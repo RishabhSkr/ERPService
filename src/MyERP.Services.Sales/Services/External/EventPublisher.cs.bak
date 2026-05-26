@@ -27,7 +27,7 @@ namespace MyERP.Services.Sales.Services.External
         {
             var eventName = typeof(T).Name;
             _logger.LogInformation(
-                "📤 EVENT PUBLISHED: {EventName} | Payload: {@Event}",
+                "ðŸ“¤ EVENT PUBLISHED: {EventName} | Payload: {@Event}",
                 eventName, @event);
             
             // TODO: Replace with actual RabbitMQ publishing

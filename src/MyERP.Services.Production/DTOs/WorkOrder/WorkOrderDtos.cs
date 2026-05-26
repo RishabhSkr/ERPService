@@ -6,12 +6,19 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
     public class CreateWorkOrderDto
     {
         public Guid ProductionOrderId { get; set; }
+        public Guid ProcessRouteId { get; set; }       // NEW: which route
         public Guid ProcessRouteStepId { get; set; }   // which step
         public Guid WorkCenterId { get; set; }          // user picks work center
         public decimal QuantityPlanned { get; set; }
         public DateTime? ScheduledStart { get; set; }
         public DateTime? ScheduledEnd { get; set; }
         public string? Notes { get; set; }
+    }
+
+    public class GenerateRouteWorkOrdersDto
+    {
+        public Guid ProductionOrderId { get; set; }
+        public Guid ProcessRouteId { get; set; }
     }
 
     // ====================================
@@ -27,6 +34,7 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         // Product info (from PO)
         public string ProductCode { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
+        public Guid? ProcessRouteId { get; set; }
 
         // Route info
         public int StepNumber { get; set; }
@@ -126,6 +134,14 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         public string ProductName { get; set; } = string.Empty;
         public decimal PoQuantityPlanned { get; set; }
         public string PoStatus { get; set; } = string.Empty;
+        public List<DashboardRouteDto> Routes { get; set; } = new();
+    }
+
+    public class DashboardRouteDto
+    {
+        public Guid ProcessRouteId { get; set; }
+        public string RouteCode { get; set; } = string.Empty;
+        public string WorkCenterName { get; set; } = string.Empty;
         public List<StepSummaryDto> Steps { get; set; } = new();
     }
 
@@ -156,8 +172,17 @@ namespace MyERP.Services.Production.DTOs.WorkOrder
         public string ProductCode { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
         public decimal PoQuantityPlanned { get; set; }
-        public string? RouteCode { get; set; }
-        public int? RouteVersion { get; set; }
+        public List<PlanningRouteDto> Routes { get; set; } = new();
+    }
+
+    public class PlanningRouteDto
+    {
+        public Guid ProcessRouteId { get; set; }
+        public string RouteCode { get; set; } = string.Empty;
+        public int RouteVersion { get; set; }
+        public Guid WorkCenterId { get; set; }
+        public string WorkCenterCode { get; set; } = string.Empty;
+        public string WorkCenterName { get; set; } = string.Empty;
         public List<PlanningStepDto> Steps { get; set; } = new();
     }
 

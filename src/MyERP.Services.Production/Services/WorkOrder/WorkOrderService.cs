@@ -62,14 +62,14 @@ namespace MyERP.Services.Production.Services.WorkOrder
             if (po.Status != ProductionOrderStatus.InProgress)
                 throw new AppException($"Cannot create Work Order — PO must be started first. Current status: '{po.Status}'");
 
-            // Guard 3: ProcessRouteStep exists
-            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
-            if (route == null)
-                throw new AppException($"No active ProcessRoute for product {po.ProductCode}");
+            // Guard 3: ProcessRoute exists and step belongs to it
+            var route = await _routeRepository.GetByIdWithDetailsAsync(dto.ProcessRouteId);
+            if (route == null || !route.IsActive)
+                throw new AppException($"ProcessRoute not found or inactive");
 
             var step = route.Steps.FirstOrDefault(s => s.ProcessRouteStepId == dto.ProcessRouteStepId);
             if (step == null)
-                throw new AppException("ProcessRouteStep not found in this product's route");
+                throw new AppException("ProcessRouteStep not found in selected route");
 
             // Guard 4: WorkCenter exists + active
             var workCenter = await _workCenterRepository.GetByIdAsync(dto.WorkCenterId);
@@ -324,7 +324,6 @@ namespace MyERP.Services.Production.Services.WorkOrder
         // ====================================================================
         public async Task<IEnumerable<WorkOrderDashboardDto>> GetDashboardAsync()
         {
-            // Get all active POs (Released/InProgress)
             var releasedPOs = await _poRepository.GetByStatusAsync(ProductionOrderStatus.Released);
             var inProgressPOs = await _poRepository.GetByStatusAsync(ProductionOrderStatus.InProgress);
             var allPOs = releasedPOs.Concat(inProgressPOs).ToList();
@@ -333,60 +332,66 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
             foreach (var po in allPOs)
             {
-                var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
-                if (route == null) continue;
+                var allRoutes = await _routeRepository.GetAllActiveByProductIdAsync(po.ProductId);
+                if (allRoutes == null || allRoutes.Count == 0) continue;
 
                 var allWOs = await _repository.GetAllByProductionOrderWithDetailsAsync(po.Id);
                 var woList = allWOs.ToList();
 
-                var steps = new List<StepSummaryDto>();
+                var routeSummaries = new List<DashboardRouteDto>();
 
-                foreach (var step in route.Steps.OrderBy(s => s.StepNumber))
+                foreach (var route in allRoutes)
                 {
-                    var stepWOs = woList.Where(w => w.ProcessRouteStepId == step.ProcessRouteStepId).ToList();
-                    var notCancelled = stepWOs.Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
+                    var steps = new List<StepSummaryDto>();
 
-                    // Sum QuantityCompleted from ALL non-cancelled WOs (not just Completed status!)
-                    var completed = notCancelled.Sum(w => w.QuantityCompleted);
-                    
-                    // Completed = only completed WOs
-                    //  var completed = notCancelled
-                    //     .Where(w => w.Status == WorkOrderStatus.Completed)
-                    //     .Sum(w => w.QuantityCompleted);
-                    
-                    var hybridSum = notCancelled.Sum(w =>
-                        w.Status == WorkOrderStatus.Completed ? w.QuantityCompleted : w.QuantityPlanned);
-
-                    var targetQty = po.QuantityPlanned * step.OutputMultiplier;
-                    var unplanned = Math.Max(0, targetQty - hybridSum);
-                    var progress = targetQty > 0
-                        ? Math.Round(completed / targetQty * 100, 1) : 0;
-
-                    var pipeline = notCancelled
-                        .Where(w => w.Status != WorkOrderStatus.Completed)
-                        .Sum(w => w.QuantityPlanned);
-
-                    string displayStatus;
-                    if (completed > 0 && completed >= targetQty) displayStatus = "Done";
-                    else if (completed > 0) displayStatus = "In Progress";
-                    else if (pipeline > 0) displayStatus = "Planned";
-                    else displayStatus = "New";
-
-                    steps.Add(new StepSummaryDto
+                    foreach (var step in route.Steps.OrderBy(s => s.StepNumber))
                     {
-                        ProcessRouteStepId = step.ProcessRouteStepId,
-                        StepNumber = step.StepNumber,
-                        ProcessCode = step.Process?.ProcessCode,
-                        ProcessName = step.Process?.ProcessName ?? "Unknown",
-                        OutputMultiplier = step.OutputMultiplier,
-                        OutputUnit = step.OutputUnit,
-                        TargetQuantity = targetQty,
-                        TotalPlanned = hybridSum,
-                        TotalCompleted = completed,
-                        UnplannedQuantity = unplanned,
-                        ProgressPercentage = progress,
-                        WoCount = stepWOs.Count,
-                        DisplayStatus = displayStatus
+                        var stepWOs = woList.Where(w => w.ProcessRouteStepId == step.ProcessRouteStepId).ToList();
+                        var notCancelled = stepWOs.Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
+
+                        var completed = notCancelled.Sum(w => w.QuantityCompleted);
+                        var hybridSum = notCancelled.Sum(w =>
+                            w.Status == WorkOrderStatus.Completed ? w.QuantityCompleted : w.QuantityPlanned);
+
+                        var targetQty = po.QuantityPlanned * step.OutputMultiplier;
+                        var unplanned = Math.Max(0, targetQty - hybridSum);
+                        var progress = targetQty > 0
+                            ? Math.Round(completed / targetQty * 100, 1) : 0;
+
+                        var pipeline = notCancelled
+                            .Where(w => w.Status != WorkOrderStatus.Completed)
+                            .Sum(w => w.QuantityPlanned);
+
+                        string displayStatus;
+                        if (completed > 0 && completed >= targetQty) displayStatus = "Done";
+                        else if (completed > 0) displayStatus = "In Progress";
+                        else if (pipeline > 0) displayStatus = "Planned";
+                        else displayStatus = "New";
+
+                        steps.Add(new StepSummaryDto
+                        {
+                            ProcessRouteStepId = step.ProcessRouteStepId,
+                            StepNumber = step.StepNumber,
+                            ProcessCode = step.Process?.ProcessCode,
+                            ProcessName = step.Process?.ProcessName ?? "Unknown",
+                            OutputMultiplier = step.OutputMultiplier,
+                            OutputUnit = step.OutputUnit,
+                            TargetQuantity = targetQty,
+                            TotalPlanned = hybridSum,
+                            TotalCompleted = completed,
+                            UnplannedQuantity = unplanned,
+                            ProgressPercentage = progress,
+                            WoCount = stepWOs.Count,
+                            DisplayStatus = displayStatus
+                        });
+                    }
+
+                    routeSummaries.Add(new DashboardRouteDto
+                    {
+                        ProcessRouteId = route.ProcessRouteId,
+                        RouteCode = route.RouteCode,
+                        WorkCenterName = route.WorkCenter?.CenterName ?? "",
+                        Steps = steps
                     });
                 }
 
@@ -398,7 +403,7 @@ namespace MyERP.Services.Production.Services.WorkOrder
                     ProductName = po.ProductName,
                     PoQuantityPlanned = po.QuantityPlanned,
                     PoStatus = po.Status,
-                    Steps = steps
+                    Routes = routeSummaries
                 });
             }
 
@@ -413,62 +418,76 @@ namespace MyERP.Services.Production.Services.WorkOrder
             var po = await _poRepository.GetByIdAsync(productionOrderId);
             if (po == null) throw new NotFoundException("ProductionOrder", productionOrderId);
 
-            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
-            if (route == null)
-                throw new AppException($"No active ProcessRoute for product {po.ProductCode}");
+            var allRoutes = await _routeRepository.GetAllActiveByProductIdAsync(po.ProductId);
+            if (allRoutes == null || allRoutes.Count == 0)
+                throw new AppException($"No active ProcessRoutes for product {po.ProductCode}");
 
             var allWOs = await _repository.GetAllByProductionOrderWithDetailsAsync(productionOrderId);
             var woList = allWOs.ToList();
 
-            var steps = new List<PlanningStepDto>();
+            var routeDtos = new List<PlanningRouteDto>();
 
-            foreach (var step in route.Steps.OrderBy(s => s.StepNumber))
+            foreach (var route in allRoutes)
             {
-                var hybridSum = await _repository.GetHybridSumForStepAsync(productionOrderId, step.ProcessRouteStepId);
-                var targetQty = po.QuantityPlanned * step.OutputMultiplier;
-                var remaining = Math.Max(0, targetQty - hybridSum);
+                var stepDtos = new List<PlanningStepDto>();
 
-                // Get equipment that can perform this process
-                var equipment = await _equipmentRepository.GetByProcessIdAsync(step.ProcessId);
-                var linkedEquipment = equipment?.Select(e => new AvailableEquipmentDto
+                foreach (var step in route.Steps.OrderBy(s => s.StepNumber))
                 {
-                    EquipmentId = e.EquipmentId,
-                    EquipmentCode = e.EquipmentCode,
-                    EquipmentName = e.EquipmentName,
-                    WorkCenterId = e.WorkCenterId,
-                    WorkCenterCode = e.WorkCenter?.CenterCode ?? "",
-                    Status = e.Status,
-                    CostPerHour = e.CostPerHour
-                }).ToList() ?? new List<AvailableEquipmentDto>();
+                    var hybridSum = await _repository.GetHybridSumForStepAsync(productionOrderId, step.ProcessRouteStepId);
+                    var targetQty = po.QuantityPlanned * step.OutputMultiplier;
+                    var remaining = Math.Max(0, targetQty - hybridSum);
 
-                // Existing WOs for this step
-                var stepWOs = woList
-                    .Where(w => w.ProcessRouteStepId == step.ProcessRouteStepId)
-                    .Select(w => new ExistingWorkOrderDto
+                    var equipment = await _equipmentRepository.GetByProcessIdAsync(step.ProcessId);
+                    var linkedEquipment = equipment?.Select(e => new AvailableEquipmentDto
                     {
-                        WorkOrderId = w.WorkOrderId,
-                        WorkOrderNumber = w.WorkOrderNumber,
-                        QuantityPlanned = w.QuantityPlanned,
-                        QuantityCompleted = w.QuantityCompleted,
-                        OutputUnit = step.OutputUnit,
-                        Status = w.Status,
-                        WorkCenterCode = w.WorkCenter?.CenterCode
-                    }).ToList();
+                        EquipmentId = e.EquipmentId,
+                        EquipmentCode = e.EquipmentCode,
+                        EquipmentName = e.EquipmentName,
+                        WorkCenterId = e.WorkCenterId,
+                        WorkCenterCode = e.WorkCenter?.CenterCode ?? "",
+                        Status = e.Status,
+                        CostPerHour = e.CostPerHour
+                    }).ToList() ?? new List<AvailableEquipmentDto>();
 
-                steps.Add(new PlanningStepDto
+                    var stepWOs = woList
+                        .Where(w => w.ProcessRouteStepId == step.ProcessRouteStepId)
+                        .Select(w => new ExistingWorkOrderDto
+                        {
+                            WorkOrderId = w.WorkOrderId,
+                            WorkOrderNumber = w.WorkOrderNumber,
+                            QuantityPlanned = w.QuantityPlanned,
+                            QuantityCompleted = w.QuantityCompleted,
+                            OutputUnit = step.OutputUnit,
+                            Status = w.Status,
+                            WorkCenterCode = w.WorkCenter?.CenterCode
+                        }).ToList();
+
+                    stepDtos.Add(new PlanningStepDto
+                    {
+                        ProcessRouteStepId = step.ProcessRouteStepId,
+                        StepNumber = step.StepNumber,
+                        ProcessCode = step.Process?.ProcessCode,
+                        ProcessName = step.Process?.ProcessName ?? "Unknown",
+                        OutputMultiplier = step.OutputMultiplier,
+                        OutputUnit = step.OutputUnit,
+                        TargetQuantity = targetQty,
+                        RemainingQuantity = remaining,
+                        SetupTimeMinutes = step.SetupTimeMinutes,
+                        RunTimePerUnitMinutes = step.RunTimePerUnitMinutes,
+                        LinkedEquipment = linkedEquipment,
+                        ExistingWorkOrders = stepWOs
+                    });
+                }
+
+                routeDtos.Add(new PlanningRouteDto
                 {
-                    ProcessRouteStepId = step.ProcessRouteStepId,
-                    StepNumber = step.StepNumber,
-                    ProcessCode = step.Process?.ProcessCode,
-                    ProcessName = step.Process?.ProcessName ?? "Unknown",
-                    OutputMultiplier = step.OutputMultiplier,
-                    OutputUnit = step.OutputUnit,
-                    TargetQuantity = targetQty,
-                    RemainingQuantity = remaining,
-                    SetupTimeMinutes = step.SetupTimeMinutes,
-                    RunTimePerUnitMinutes = step.RunTimePerUnitMinutes,
-                    LinkedEquipment = linkedEquipment,
-                    ExistingWorkOrders = stepWOs
+                    ProcessRouteId = route.ProcessRouteId,
+                    RouteCode = route.RouteCode,
+                    RouteVersion = route.Version,
+                    WorkCenterId = route.WorkCenterId,
+                    WorkCenterCode = route.WorkCenter?.CenterCode ?? "",
+                    WorkCenterName = route.WorkCenter?.CenterName ?? "",
+                    Steps = stepDtos
                 });
             }
 
@@ -479,9 +498,7 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 ProductCode = po.ProductCode,
                 ProductName = po.ProductName,
                 PoQuantityPlanned = po.QuantityPlanned,
-                RouteCode = route.RouteCode,
-                RouteVersion = route.Version,
-                Steps = steps
+                Routes = routeDtos
             };
         }
 
@@ -530,6 +547,90 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 workOrders.Count, po.OrderNumber);
 
             return await GetByProductionOrderAsync(productionOrderId);
+        }
+
+        // ====================================================================
+        // GENERATE WOs FOR SPECIFIC ROUTE
+        // ====================================================================
+        public async Task<IEnumerable<WorkOrderDto>> GenerateWorkOrdersForRouteAsync(GenerateRouteWorkOrdersDto dto)
+        {
+            // ====================================================================
+            // ENTIRE ROUTE MODE → 1 WO for the whole route
+            // ProcessRouteStepId = null (route-level, not step-level)
+            // Last step's output quantity = WO's planned quantity
+            // Last step output = completion of the WO
+            // ====================================================================
+
+            var po = await _poRepository.GetByIdAsync(dto.ProductionOrderId);
+            if (po == null) throw new NotFoundException("ProductionOrder", dto.ProductionOrderId);
+
+            if (po.Status != ProductionOrderStatus.InProgress)
+                throw new AppException($"Cannot create Work Order — PO must be started first. Current status: '{po.Status}'");
+
+            var route = await _routeRepository.GetByIdWithDetailsAsync(dto.ProcessRouteId);
+            if (route == null || !route.IsActive)
+                throw new AppException("Process Route not found or inactive");
+
+            // Guard: A route-level WO already exists (ProcessRouteStepId == null + same RouteCode)
+            var existingWOs = await _repository.GetAllByProductionOrderWithDetailsAsync(dto.ProductionOrderId);
+            var routeLevelWOExists = existingWOs.Any(w =>
+                w.ProcessRouteStepId == null
+                && w.RouteCode == route.RouteCode
+                && w.Status != WorkOrderStatus.Cancelled);
+
+            if (routeLevelWOExists)
+                throw new AppException($"A Work Order for the entire route '{route.RouteCode}' already exists");
+
+            // Qty = last step's output (final output of the route)
+            var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).FirstOrDefault();
+            decimal quantityPlanned;
+            if (lastStep != null)
+            {
+                var hybridSum = await _repository.GetHybridSumForStepAsync(dto.ProductionOrderId, lastStep.ProcessRouteStepId);
+                var targetQty = po.QuantityPlanned * lastStep.OutputMultiplier;
+                quantityPlanned = Math.Max(0, targetQty - hybridSum);
+            }
+            else
+            {
+                quantityPlanned = po.QuantityPlanned;
+            }
+
+            if (quantityPlanned <= 0)
+                throw new AppException("Route is already fully planned");
+
+            var counter = await _repository.GetCountAsync();
+            counter++;
+
+            var stepNames = string.Join(" → ", route.Steps
+                .OrderBy(s => s.StepNumber)
+                .Select(s => s.Process?.ProcessName ?? $"Step {s.StepNumber}"));
+
+            var workOrder = new Models.WorkOrder
+            {
+                WorkOrderId = Guid.NewGuid(),
+                WorkOrderNumber = $"WO-{DateTime.UtcNow:yyyy}-{counter:D4}",
+                ProductionOrderId = dto.ProductionOrderId,
+                ProcessRouteStepId = null,              // null = entire route, not a single step
+                ProcessId = null,
+                WorkCenterId = route.WorkCenterId,
+                StepNumber = 0,                         // 0 = entire route
+                OperationName = $"{route.RouteCode} — All Steps ({stepNames})",
+                RouteCode = route.RouteCode,
+                RouteVersion = route.Version,
+                ProductCode = po.ProductCode,
+                ProductName = po.ProductName,
+                QuantityPlanned = quantityPlanned,
+                Status = WorkOrderStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _repository.AddAsync(workOrder);
+
+            _logger.LogInformation(
+                "Generated 1 route-level WO {WONumber} for Route {RouteCode} on PO {PONumber}",
+                workOrder.WorkOrderNumber, route.RouteCode, po.OrderNumber);
+
+            return await GetByProductionOrderAsync(dto.ProductionOrderId);
         }
 
         // ====================================================================

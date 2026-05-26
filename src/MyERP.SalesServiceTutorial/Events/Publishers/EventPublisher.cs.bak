@@ -52,7 +52,7 @@ public class EventPublisher : IEventPublisher
                 body: body);
             
             _logger.LogInformation(
-                "📢 EVENT PUBLISHED to RabbitMQ: {EventName}\n{EventJson}", 
+                "ðŸ“¢ EVENT PUBLISHED to RabbitMQ: {EventName}\n{EventJson}", 
                 eventName, 
                 eventJson);
         }

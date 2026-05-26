@@ -4,7 +4,7 @@ namespace MyERP.Services.Production.Services.External
 
     /// <summary>
     /// RawMaterial DTO from Inventory Service
-    /// Maps Inventory fields: TotalStock → CurrentStock, TotalReserved → ReservedStock, etc.
+    /// Maps Inventory fields: TotalStock â†’ CurrentStock, TotalReserved â†’ ReservedStock, etc.
     /// </summary>
     public class RawMaterialDto
     {

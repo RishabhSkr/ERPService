@@ -16,13 +16,13 @@ public class SalesOrderCreatedConsumer : IConsumer<SalesOrderCreatedEvent>
         var order = context.Message;
         
         _logger.LogInformation(
-            "📦 [MassTransit] ORDER RECEIVED! SalesOrderId: {SalesOrderId}, CustomerId: {CustomerId}, OrderNumber: {OrderNumber}",
+            "ðŸ“¦ [MassTransit] ORDER RECEIVED! SalesOrderId: {SalesOrderId}, CustomerId: {CustomerId}, OrderNumber: {OrderNumber}",
             order.SalesOrderId,
             order.CustomerId,
             order.OrderNumber);
         
         // Process the event (update inventory, send email, etc.)
-        _logger.LogInformation("✅ Order {SalesOrderId} processed successfully!", order.SalesOrderId);
+        _logger.LogInformation("âœ… Order {SalesOrderId} processed successfully!", order.SalesOrderId);
         
         return Task.CompletedTask;
     }

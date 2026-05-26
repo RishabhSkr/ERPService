@@ -18,24 +18,24 @@ public class MassTransitEventPublisher : IEventPublisher
     
     public async Task PublishAsync<T>(T @event) where T : class
     {
-        Console.WriteLine($"\n🟡 [DEBUG 5] MassTransitEventPublisher.PublishAsync() called");
+        Console.WriteLine($"\nðŸŸ¡ [DEBUG 5] MassTransitEventPublisher.PublishAsync() called");
         Console.WriteLine($"   Event Type: {typeof(T).Name}");
         Console.WriteLine($"   Event Full Name: {typeof(T).FullName}");
         
         try
         {
-            Console.WriteLine($"🟡 [DEBUG 6] Calling _publishEndpoint.Publish()...");
-            _logger.LogInformation("🚀 [MassTransit] Publishing {EventType} event", typeof(T).Name);
+            Console.WriteLine($"ðŸŸ¡ [DEBUG 6] Calling _publishEndpoint.Publish()...");
+            _logger.LogInformation("ðŸš€ [MassTransit] Publishing {EventType} event", typeof(T).Name);
             
             await _publishEndpoint.Publish(@event);
             
-            Console.WriteLine($"🟢 [DEBUG 7] _publishEndpoint.Publish() completed!");
-            _logger.LogInformation("✅ Event published successfully!");
+            Console.WriteLine($"ðŸŸ¢ [DEBUG 7] _publishEndpoint.Publish() completed!");
+            _logger.LogInformation("âœ… Event published successfully!");
         }
         catch (Exception e)
         {
-            Console.WriteLine($"🔴 [DEBUG ERROR] Exception in PublishAsync: {e.Message}");
-            _logger.LogError(e, "❌ Failed to publish event {EventType}", typeof(T).Name);
+            Console.WriteLine($"ðŸ”´ [DEBUG ERROR] Exception in PublishAsync: {e.Message}");
+            _logger.LogError(e, "âŒ Failed to publish event {EventType}", typeof(T).Name);
             throw;
         }
         

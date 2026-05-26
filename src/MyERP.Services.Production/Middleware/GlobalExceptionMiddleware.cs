@@ -1,10 +1,10 @@
 /*
  * GlobalExceptionMiddleware
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: try-catch in every controller action
- * ✅ INDUSTRY:
+ * âŒ NOOB: try-catch in every controller action
+ * âœ… INDUSTRY:
  *    1. Centralized exception handling
  *    2. Consistent error response format
  *    3. Logging for debugging
@@ -75,7 +75,7 @@ namespace MyERP.Services.Production.Middleware
 
     /// <summary>
     /// Standard API response wrapper
-    /// 📝 Industry Practice: Consistent response format for all APIs
+    /// ðŸ“ Industry Practice: Consistent response format for all APIs
     /// </summary>
     public class ApiResponse
     {

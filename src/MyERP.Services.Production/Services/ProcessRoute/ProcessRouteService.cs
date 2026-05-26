@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using MyERP.Services.Production.Constants;
+using MyERP.Services.Production.Data;
 using MyERP.Services.Production.DTOs.ProcessRoute;
 using MyERP.Services.Production.Exceptions;
 using MyERP.Services.Production.Models;
@@ -9,11 +12,13 @@ namespace MyERP.Services.Production.Services.ProcessRoute
     public class ProcessRouteService : IProcessRouteService
     {
         private readonly IProcessRouteRepository _repository;
+        private readonly ProductionDbContext _context;
         private readonly ILogger<ProcessRouteService> _logger;
 
-        public ProcessRouteService(IProcessRouteRepository repository, ILogger<ProcessRouteService> logger)
+        public ProcessRouteService(IProcessRouteRepository repository, ProductionDbContext context, ILogger<ProcessRouteService> logger)
         {
             _repository = repository;
+            _context = context;
             _logger = logger;
         }
 
@@ -128,5 +133,27 @@ namespace MyERP.Services.Production.Services.ProcessRoute
             }).ToList()
         };
 
+        public async Task DeleteAsync(Guid routeId)
+        {
+            var route = await _repository.GetByIdWithDetailsAsync(routeId);
+            if (route == null)
+                throw new NotFoundException("ProcessRoute", routeId);
+
+            // Check for active WOs on any step of this route
+            var stepIds = route.Steps.Select(s => s.ProcessRouteStepId).ToList();
+            var hasActiveWOs = await _context.WorkOrders.AnyAsync(w =>
+                stepIds.Contains(w.ProcessRouteStepId ?? Guid.Empty)
+                && w.Status != WorkOrderStatus.Cancelled
+                && w.Status != WorkOrderStatus.Completed);
+
+            if (hasActiveWOs)
+                throw new AppException("Cannot delete — Route has active Work Orders. Complete or cancel them first.");
+
+            route.IsActive = false;
+            route.UpdatedAt = DateTime.UtcNow;
+            await _repository.UpdateAsync(route);
+
+            _logger.LogInformation("ProcessRoute {RouteCode} soft-deleted (deactivated)", route.RouteCode);
+        }
     }
 }

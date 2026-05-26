@@ -1,10 +1,10 @@
 /*
  * BOM Service Interface
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: Business logic in controllers
- * ✅ INDUSTRY:
+ * âŒ NOOB: Business logic in controllers
+ * âœ… INDUSTRY:
  *    1. Service layer contains business logic
  *    2. Controllers only handle HTTP concerns
  *    3. Logic reusable across controllers, background jobs, etc.

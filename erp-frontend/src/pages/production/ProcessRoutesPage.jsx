@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Route as RouteIcon, Plus, Edit2, Trash2, X, RefreshCw, Save, ChevronDown, ChevronRight, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
-    getProcessRoutes, createProcessRoute, updateProcessRoute,
+    getProcessRoutes, createProcessRoute, updateProcessRoute, deleteProcessRoute,
     getProcesses, getWorkCenters, getEquipment
 } from '../../api/productionService';
 import { getUnits } from '../../api/inventoryService';
@@ -168,6 +168,18 @@ const ProcessRoutesPage = () => {
         return p ? `${p.productName || p.name} (${p.productCode || p.code})` : pid;
     };
 
+    const handleDelete = async (route) => {
+        const confirmed = confirm(`Deactivate route "${route.routeCode}"? It can be reactivated later.`);
+        if (!confirmed) return;
+        try {
+            await deleteProcessRoute(route.processRouteId);
+            toast.success('Route deactivated!');
+            load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Cannot delete route');
+        }
+    };
+
     // Helper to get display values for SearchSelect
     const getProductDisplayValue = (pid) => {
         const p = products.find(pr => (pr.id || pr.productId) === pid);
@@ -245,6 +257,11 @@ const ProcessRoutesPage = () => {
                                         <button onClick={() => openEdit(route)} className="p-1.5 rounded hover:bg-blue-50 text-slate-500 hover:text-blue-600" title="Edit">
                                             <Edit2 size={15} />
                                         </button>
+                                        {route.isActive && (
+                                            <button onClick={() => handleDelete(route)} className="p-1.5 rounded hover:bg-red-50 text-slate-500 hover:text-red-600" title="Deactivate">
+                                                <Trash2 size={15} />
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                                 {/* Expanded: Steps — NO materials */}

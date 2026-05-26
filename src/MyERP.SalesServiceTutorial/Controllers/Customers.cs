@@ -20,7 +20,7 @@ public class CustomersController : ControllerBase
     [Authorize(Policy = "DynamicPermission")]                   
     public ActionResult GetProtectedData()
     {
-        return Ok(ApiResponse.Ok("✅ You are authenticated! This is protected data."));
+        return Ok(ApiResponse.Ok("âœ… You are authenticated! This is protected data."));
     }
     
     [HttpGet]

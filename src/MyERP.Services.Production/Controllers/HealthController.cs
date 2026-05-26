@@ -1,10 +1,10 @@
 /*
  * HealthController - Health Check Endpoint
  * 
- * 📚 INDUSTRY vs NOOB:
+ * INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: No health endpoint, just test manually
- * ✅ INDUSTRY:
+ * NOOB: No health endpoint, just test manually
+ * INDUSTRY:
  *    1. /health endpoint for load balancers, Kubernetes
  *    2. Check dependencies (DB, Redis, RabbitMQ)
  *    3. Return structured health status

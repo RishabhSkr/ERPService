@@ -64,6 +64,20 @@ namespace MyERP.Services.Production.Repositories.BOM
             return bom;
         }
 
+        public async Task ReplaceLinesAsync(Guid bomId, List<BOMLine> newLines)
+        {
+            // Step 1: Delete ALL existing lines directly from DB (bypasses EF tracking issue)
+            var oldLines = await _context.BOMLines
+                .Where(l => l.BOMId == bomId)
+                .ToListAsync();
+            _context.BOMLines.RemoveRange(oldLines);
+
+            // Step 2: Add fresh lines (always new GUIDs — no tracking conflict possible)
+            await _context.BOMLines.AddRangeAsync(newLines);
+
+            await _context.SaveChangesAsync();
+        }
+
         public async Task DeleteAsync(Guid bomId)
         {
             var bom = await _context.BOMs.FindAsync(bomId);

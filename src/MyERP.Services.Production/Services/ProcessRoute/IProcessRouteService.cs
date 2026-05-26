@@ -9,5 +9,6 @@ namespace MyERP.Services.Production.Services.ProcessRoute
         Task<IEnumerable<ProcessRouteDto>> GetAllAsync();
         Task<ProcessRouteDto> CreateAsync(CreateProcessRouteDto dto);
         Task<ProcessRouteDto> UpdateAsync(Guid id, CreateProcessRouteDto dto);
+        Task DeleteAsync(Guid routeId);
     }
 }

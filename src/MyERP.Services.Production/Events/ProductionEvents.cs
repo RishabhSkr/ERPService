@@ -1,19 +1,19 @@
 /*
  * Production Events - PRODUCTION-ONLY events
  * 
- * 📚 INDUSTRY PRACTICE:
+ * ðŸ“š INDUSTRY PRACTICE:
  * 
- * ✅ Cross-service events (MaterialReservationRequested, StockReserved, etc.)
- *    live in MyERP.Shared.Events — BOTH publisher and consumer use SAME class
+ * âœ… Cross-service events (MaterialReservationRequested, StockReserved, etc.)
+ *    live in MyERP.Shared.Events â€” BOTH publisher and consumer use SAME class
  *    
- * ✅ Production-internal events (BatchProgress — not consumed by other services)
+ * âœ… Production-internal events (BatchProgress â€” not consumed by other services)
  *    live HERE in this file
  * 
- * 📝 WHY separate?
+ * ðŸ“ WHY separate?
  *    MassTransit uses "Namespace:ClassName" for exchange routing
  *    If Publisher uses MyERP.Services.Production.Events.MaterialReservationRequestedEvent
  *    But Consumer uses MyERP.Shared.Events.MaterialReservationRequestedEvent
- *    → Different exchanges → Messages DON'T connect! 💀
+ *    â†’ Different exchanges â†’ Messages DON'T connect! ðŸ’€
  */
 
 namespace MyERP.Services.Production.Events
@@ -24,7 +24,7 @@ namespace MyERP.Services.Production.Events
     
     /// <summary>
     /// Base event with standard metadata
-    /// 📝 Industry Practice: All events inherit from base
+    /// ðŸ“ Industry Practice: All events inherit from base
     ///    Provides consistency, easier logging, tracing
     /// </summary>
     public abstract class ProductionEventBase
@@ -40,7 +40,7 @@ namespace MyERP.Services.Production.Events
 
     /// <summary>
     /// Real-time progress update (for dashboard)
-    /// NOT consumed by other services — Production internal only
+    /// NOT consumed by other services â€” Production internal only
     /// </summary>
     public class BatchProgressEvent : ProductionEventBase
     {
@@ -56,17 +56,17 @@ namespace MyERP.Services.Production.Events
     }
 
     // ========================================
-    // CROSS-SERVICE EVENTS → USE MyERP.Shared.Events
+    // CROSS-SERVICE EVENTS â†’ USE MyERP.Shared.Events
     // ========================================
     //
-    // ✅ MaterialReservationRequestedEvent  → MyERP.Shared.Events
-    // ✅ MaterialToReserve                  → MyERP.Shared.Events
-    // ✅ ProductionOrderCancelledEvent      → MyERP.Shared.Events
-    // ✅ BatchConcludedEvent                → MyERP.Shared.Events
-    // ✅ MaterialConsumed                   → MyERP.Shared.Events
-    // ✅ MaterialReturnRequestedEvent       → MyERP.Shared.Events
-    // ✅ StockReservedEvent                 → MyERP.Shared.Events
-    // ✅ ReservedMaterial                   → MyERP.Shared.Events
+    // âœ… MaterialReservationRequestedEvent  â†’ MyERP.Shared.Events
+    // âœ… MaterialToReserve                  â†’ MyERP.Shared.Events
+    // âœ… ProductionOrderCancelledEvent      â†’ MyERP.Shared.Events
+    // âœ… BatchConcludedEvent                â†’ MyERP.Shared.Events
+    // âœ… MaterialConsumed                   â†’ MyERP.Shared.Events
+    // âœ… MaterialReturnRequestedEvent       â†’ MyERP.Shared.Events
+    // âœ… StockReservedEvent                 â†’ MyERP.Shared.Events
+    // âœ… ReservedMaterial                   â†’ MyERP.Shared.Events
     //
     // Add: using MyERP.Shared.Events; wherever these are used
 }

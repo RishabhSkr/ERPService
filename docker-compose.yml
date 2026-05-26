@@ -8,23 +8,21 @@ services:
   # 🗄️ INFRASTRUCTURE (Pehle yeh start hote hain)
   # ═══════════════════════════════════════
 
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: myerp-sql
+  postgres:
+    image: postgres:15-alpine
+    container_name: myerp-postgres
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SA_PASSWORD:-MyErpPassword123!}"
-      # ${SA_PASSWORD:-default} = .env se padho, nahi mile toh default use karo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${PG_PASSWORD:-MyErpPassword123!}"
     ports:
-      - "1434:1433"     # Host:Container — host pe 1434, andar 1433
+      - "5432:5432"     # Host:Container
     volumes:
-      - sqldata:/var/opt/mssql  # Data persist — container delete karo, data safe!
+      - pgdata:/var/lib/postgresql/data  # Data persist
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${SA_PASSWORD:-MyErpPassword123!}" -Q "SELECT 1" -C -l 5
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s   # SQL Server ko 30s do boot hone ke liye
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -66,14 +64,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
       # Double underscore (__) = JSON nesting
-      # ConnectionStrings__DefaultConnection = appsettings ka ConnectionStrings.DefaultConnection
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyERP_Identity;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=MyERP_Identity;Username=postgres;Password=${PG_PASSWORD:-MyErpPassword123!}"
       Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
       Jwt__Issuer: "MyERP_Identity"
       Jwt__Audience: "MyERP_Clients"
     depends_on:
-      sqlserver:
-        condition: service_healthy   # SQL healthy hone ka wait karega
+      postgres:
+        condition: service_healthy
 
   sales-service:
     build:
@@ -84,7 +81,7 @@ services:
       - "5002:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=SalesDb;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=SalesDb;Username=postgres;Password=${PG_PASSWORD:-MyErpPassword123!}"
       Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
       Jwt__Issuer: "MyERP_Identity"
       Jwt__Audience: "MyERP_Clients"
@@ -94,7 +91,7 @@ services:
       Services__InventoryServiceUrl: "http://inventory-service:8080"
       Services__IdentityService__BaseUrl: "http://identity-service:8080"
     depends_on:
-      sqlserver:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -108,7 +105,7 @@ services:
       - "5003:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyERP_Inventory;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=MyERP_Inventory;Username=postgres;Password=${PG_PASSWORD:-MyErpPassword123!}"
       Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
       Jwt__Issuer: "MyERP_Identity"
       Jwt__Audience: "MyERP_Clients"
@@ -118,7 +115,7 @@ services:
       RabbitMQ__Password: guest
       Redis__ConnectionString: "redis:6379"      # redis = container name
     depends_on:
-      sqlserver:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -134,7 +131,7 @@ services:
       - "5004:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=ProductionDb;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=ProductionDb;Username=postgres;Password=${PG_PASSWORD:-MyErpPassword123!}"
       Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
       Jwt__Issuer: "MyERP_Identity"
       Jwt__Audience: "MyERP_Clients"
@@ -144,7 +141,7 @@ services:
       Redis__ConnectionString: "redis:6379"
       Services__InventoryServiceUrl: "http://inventory-service:8080"
     depends_on:
-      sqlserver:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -160,7 +157,7 @@ services:
       - "5000:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=MyERP_Identity;User Id=sa;Password=${SA_PASSWORD:-MyErpPassword123!};TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=MyERP_Identity;Username=postgres;Password=${PG_PASSWORD:-MyErpPassword123!}"
       Jwt__Key: "${JWT_KEY:-ThisIsASecretKeyForMyERPProject_ChangeThisInProd123!}"
       Jwt__Issuer: "MyERP_Identity"
       Jwt__Audience: "MyERP_Clients"
@@ -191,4 +188,4 @@ services:
 
 # Persistent data — container delete karo, data rahega
 volumes:
-  sqldata:
+  pgdata:

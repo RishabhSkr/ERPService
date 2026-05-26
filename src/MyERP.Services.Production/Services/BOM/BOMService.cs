@@ -89,45 +89,58 @@ namespace MyERP.Services.Production.Services.BOM
 
         public async Task<BOMDto> UpdateAsync(Guid bomId, UpdateBOMDto dto)
         {
-            var bom = await _repository.GetByIdWithLinesAsync(bomId);
+            // ================================================================
+            // FIX: EF Core concurrency issue
+            //
+            // OLD (BROKEN):
+            //   bom.Lines.Clear();           ← EF marks old lines for DELETE
+            //   bom.Lines.Add(new BOMLine    ← Same PK → DELETE + INSERT conflict
+            //   { BOMLineId = line.BOMLineId ?? NewGuid() });
+            //   SaveChanges → "affected 0 rows" exception!
+            //
+            // NEW (CORRECT):
+            //   1. Update BOM header separately (no Lines touch)
+            //   2. ReplaceLinesAsync = explicit DELETE from DB + INSERT fresh rows
+            //      → No EF tracking confusion, no shared PKs
+            // ================================================================
+
+            var bom = await _repository.GetByIdAsync(bomId);  // no .Include(Lines) → clean context
             if (bom == null)
                 throw new NotFoundException("BOM", bomId);
 
+            // Step 1: Update header fields only
             if (dto.Description != null)
                 bom.Description = dto.Description;
 
             if (dto.Lines != null)
-            {
-                // Replace lines - could also do smart merge
-                bom.Lines.Clear();
-                foreach (var (line, index) in dto.Lines.Select((l, i) => (l, i)))
-                {
-                    bom.Lines.Add(new BOMLine
-                    {
-                        BOMLineId = line.BOMLineId ?? Guid.NewGuid(),
-                        BOMId = bomId,
-                        LineNumber = index + 1,
-                        RawMaterialId = line.RawMaterialId,
-                        MaterialCode = line.MaterialCode,
-                        MaterialName = line.MaterialName,
-                        Quantity = line.Quantity,
-                        Unit = line.Unit,
-                        ScrapPercentage = line.ScrapPercentage,
-                        ProcessId = line.ProcessId,
-                        ProcessCode = line.ProcessCode,
-                        ProcessName = line.ProcessName
-                    });
-                }
-            }
-
-            // Auto-increment version when lines change
-            if (dto.Lines != null)
-                bom.Version++;
+                bom.Version++;  // Auto-increment version when lines change
 
             bom.UpdatedAt = DateTime.UtcNow;
-            await _repository.UpdateAsync(bom);
-            
-            return MapToDto(bom);
+            await _repository.UpdateAsync(bom);  // Only updates BOM header — no Lines
+
+            // Step 2: Replace lines atomically (if lines provided)
+            if (dto.Lines != null)
+            {
+                var newLines = dto.Lines.Select((line, index) => new BOMLine
+                {
+                    BOMLineId = Guid.NewGuid(),  // ALWAYS new GUID — never reuse old PK!
+                    BOMId = bomId,
+                    LineNumber = index + 1,
+                    RawMaterialId = line.RawMaterialId,
+                    MaterialCode = line.MaterialCode,
+                    MaterialName = line.MaterialName,
+                    Quantity = line.Quantity,
+                    Unit = line.Unit,
+                    ScrapPercentage = line.ScrapPercentage,
+                    ProcessId = line.ProcessId,
+                    ProcessCode = line.ProcessCode,
+                    ProcessName = line.ProcessName
+                }).ToList();
+
+                await _repository.ReplaceLinesAsync(bomId, newLines);
+            }
+
+            return MapToDto(await _repository.GetByIdWithLinesAsync(bomId) ?? throw new NotFoundException("BOM", bomId));
         }
 
         public async Task DeactivateAsync(Guid bomId)

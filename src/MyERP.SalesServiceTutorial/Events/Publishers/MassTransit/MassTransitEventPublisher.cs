@@ -20,12 +20,12 @@ public class MassTransitEventPublisher : IEventPublisher
     {
         try
         {
-            _logger.LogInformation("🚀 [MassTransit] Publishing {EventType} event", typeof(T).Name);
+            _logger.LogInformation("ðŸš€ [MassTransit] Publishing {EventType} event", typeof(T).Name);
             await _publishEndpoint.Publish(@event);
-            _logger.LogInformation("✅ Event published successfully!");
+            _logger.LogInformation("âœ… Event published successfully!");
         }catch (Exception e)
         {
-            _logger.LogError(e, "❌ Failed to publish event {EventType}", typeof(T).Name);
+            _logger.LogError(e, "âŒ Failed to publish event {EventType}", typeof(T).Name);
             throw; // Re-throw so controller knows about error
         }
         

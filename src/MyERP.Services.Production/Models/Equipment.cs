@@ -22,5 +22,8 @@ namespace MyERP.Services.Production.Models
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
+
+        // Navigation — linked processes via junction table
+        public virtual ICollection<EquipmentProcess> EquipmentProcesses { get; set; } = new List<EquipmentProcess>();
     }
 }

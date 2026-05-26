@@ -1,10 +1,10 @@
 /*
  * PendingRequest - Inbox for Sales Order events
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: Process sales order immediately in consumer (risky!)
- * ✅ INDUSTRY: Inbox Pattern
+ * âŒ NOOB: Process sales order immediately in consumer (risky!)
+ * âœ… INDUSTRY: Inbox Pattern
  *    1. Save event to database first (guaranteed persistence)
  *    2. Production manager reviews and approves
  *    3. Then create ProductionOrder
@@ -39,7 +39,7 @@ namespace MyERP.Services.Production.Models
         
         /// <summary>
         /// Status: Pending, Approved, Cancelled
-        /// 📝 Industry: Use constants or enum, not magic strings
+        /// ðŸ“ Industry: Use constants or enum, not magic strings
         /// </summary>
         public string Status { get; set; } = PendingRequestStatus.Pending;
         
@@ -71,7 +71,7 @@ namespace MyERP.Services.Production.Models
         
         /// <summary>
         /// Event ID for idempotency check
-        /// 📝 Industry: Prevent duplicate processing if same event arrives twice
+        /// ðŸ“ Industry: Prevent duplicate processing if same event arrives twice
         /// </summary>
         public Guid EventId { get; set; }
         

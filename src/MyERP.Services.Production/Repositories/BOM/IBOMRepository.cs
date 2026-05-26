@@ -1,10 +1,10 @@
 /*
  * BOM Repository Interface
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: Access DbContext directly in controllers
- * ✅ INDUSTRY:
+ * âŒ NOOB: Access DbContext directly in controllers
+ * âœ… INDUSTRY:
  *    1. Repository abstracts data access
  *    2. Interface allows mocking in tests
  *    3. Single Responsibility: only data operations
@@ -24,6 +24,7 @@ namespace MyERP.Services.Production.Repositories.BOM
         Task<bool> ExistsByCodeAsync(string bomCode);
         Task<Models.BOM> CreateAsync(Models.BOM bom);
         Task<Models.BOM> UpdateAsync(Models.BOM bom);
+        Task ReplaceLinesAsync(Guid bomId, List<BOMLine> newLines);  // Atomic delete old + insert new
         Task DeleteAsync(Guid bomId);
     }
 }

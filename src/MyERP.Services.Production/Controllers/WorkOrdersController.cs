@@ -113,6 +113,16 @@ namespace MyERP.Services.Production.Controllers
         }
 
         /// <summary>
+        /// Generate Work Orders for a specific route (all steps in one click)
+        /// </summary>
+        [HttpPost("work-orders/generate-route")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<WorkOrderDto>>>> GenerateWorkOrdersForRoute([FromBody] GenerateRouteWorkOrdersDto dto)
+        {
+            var result = await _service.GenerateWorkOrdersForRouteAsync(dto);
+            return Ok(ApiResponse<IEnumerable<WorkOrderDto>>.Ok(result, "Generated work orders for route"));
+        }
+
+        /// <summary>
         /// Get all Work Orders for a Production Order
         /// </summary>
         [HttpGet("orders/{productionOrderId:guid}/work-orders")]

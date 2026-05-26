@@ -42,5 +42,12 @@ namespace MyERP.Services.Production.Controllers
         [HttpPut("{id:guid}")]
         public async Task<ActionResult<ApiResponse<ProcessRouteDto>>> Update(Guid id, [FromBody] CreateProcessRouteDto dto) =>
             Ok(ApiResponse<ProcessRouteDto>.Ok(await _service.UpdateAsync(id, dto), "ProcessRoute updated"));
+
+        [HttpDelete("{id:guid}")]
+        public async Task<ActionResult<ApiResponse<string>>> Delete(Guid id)
+        {
+            await _service.DeleteAsync(id);
+            return Ok(ApiResponse<string>.Ok("Process Route deactivated successfully"));
+        }
     }
 }

@@ -7,6 +7,7 @@ namespace MyERP.Services.Production.Repositories.ProcessRoute
         Task<Models.ProcessRoute?> GetByIdAsync(Guid id);
         Task<Models.ProcessRoute?> GetByIdWithDetailsAsync(Guid id);
         Task<Models.ProcessRoute?> GetActiveByProductIdAsync(Guid productId);
+        Task<List<Models.ProcessRoute>> GetAllActiveByProductIdAsync(Guid productId);
         Task<IEnumerable<Models.ProcessRoute>> GetAllAsync();
         Task<bool> ExistsByCodeAsync(string routeCode);
         Task<Models.ProcessRoute> CreateAsync(Models.ProcessRoute entity);

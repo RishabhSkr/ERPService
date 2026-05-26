@@ -17,6 +17,7 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
         // === EXISTING: Auto-generate (kept as convenience) ===
         Task<IEnumerable<WorkOrderDto>> GenerateWorkOrdersAsync(Guid productionOrderId);
+        Task<IEnumerable<WorkOrderDto>> GenerateWorkOrdersForRouteAsync(GenerateRouteWorkOrdersDto dto);
         Task<IEnumerable<WorkOrderDto>> GetByProductionOrderAsync(Guid productionOrderId);
 
         // === EXISTING: Equipment activation + tracking ===

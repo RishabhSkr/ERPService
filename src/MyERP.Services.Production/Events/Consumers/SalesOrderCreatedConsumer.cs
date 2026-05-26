@@ -1,10 +1,10 @@
 /*
  * SalesOrderCreatedConsumer - Handles Sales Order events
  * 
- * 📚 INDUSTRY vs NOOB:
+ * ðŸ“š INDUSTRY vs NOOB:
  * 
- * ❌ NOOB: Process immediately, no error handling, lose messages on failure
- * ✅ INDUSTRY:
+ * âŒ NOOB: Process immediately, no error handling, lose messages on failure
+ * âœ… INDUSTRY:
  *    1. Inbox Pattern - save to DB first, process later
  *    2. Idempotency check - prevent duplicate processing
  *    3. Structured logging with correlation IDs
@@ -35,12 +35,12 @@ namespace MyERP.Services.Production.Events.Consumers
 
         public async Task Consume(ConsumeContext<SalesOrderCreatedEvent> context)
         {   
-            Console.WriteLine("\n🟣 [DEBUG 8] Production Consumer - Consume() method called!");
+            Console.WriteLine("\nðŸŸ£ [DEBUG 8] Production Consumer - Consume() method called!");
             Console.WriteLine($"   Message ID: {context.MessageId}");
             
             var @event = context.Message;
             
-            Console.WriteLine($"🟣 [DEBUG 9] Event received:");
+            Console.WriteLine($"ðŸŸ£ [DEBUG 9] Event received:");
             Console.WriteLine($"   EventId: {@event.EventId}");
             Console.WriteLine($"   OrderNumber: {@event.OrderNumber}");
             Console.WriteLine($"   SalesOrderId: {@event.SalesOrderId}");
@@ -55,21 +55,21 @@ namespace MyERP.Services.Production.Events.Consumers
             // ====================================
             // IDEMPOTENCY CHECK
             // ====================================
-            Console.WriteLine($"🟣 [DEBUG 10] Checking idempotency...");
+            Console.WriteLine($"ðŸŸ£ [DEBUG 10] Checking idempotency...");
             
             var alreadyProcessed = await _context.PendingRequests
                 .AnyAsync(r => r.EventId == @event.EventId);
                 
             if (alreadyProcessed)
             {
-                Console.WriteLine($"🟡 [DEBUG] Duplicate event - already processed!");
+                Console.WriteLine($"ðŸŸ¡ [DEBUG] Duplicate event - already processed!");
                 _logger.LogWarning(
                     "Duplicate event detected: EventId={EventId}, already processed",
                     @event.EventId);
                 return;
             }
 
-            Console.WriteLine($"🟣 [DEBUG 11] Creating PendingRequest...");
+            Console.WriteLine($"ðŸŸ£ [DEBUG 11] Creating PendingRequest...");
 
             // ====================================
             // CREATE PENDING REQUEST (Inbox Pattern)
@@ -97,11 +97,11 @@ namespace MyERP.Services.Production.Events.Consumers
                 }).ToList()
             };
 
-            Console.WriteLine($"🟣 [DEBUG 12] Saving to database...");
+            Console.WriteLine($"ðŸŸ£ [DEBUG 12] Saving to database...");
             _context.PendingRequests.Add(pendingRequest);
             await _context.SaveChangesAsync();
 
-            Console.WriteLine($"🟢 [DEBUG 13] PendingRequest saved successfully!");
+            Console.WriteLine($"ðŸŸ¢ [DEBUG 13] PendingRequest saved successfully!");
             Console.WriteLine($"   PendingRequest ID: {pendingRequest.Id}");
             
             _logger.LogInformation(

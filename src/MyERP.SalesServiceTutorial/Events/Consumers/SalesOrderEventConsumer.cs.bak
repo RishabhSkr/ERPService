@@ -18,7 +18,7 @@ public class SalesOrderEventConsumer : BackgroundService
     
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🎧 Event Consumer starting...");
+        _logger.LogInformation("ðŸŽ§ Event Consumer starting...");
         
         // We'll add the RabbitMQ listening code here
         var factory = new ConnectionFactory
@@ -64,7 +64,7 @@ public class SalesOrderEventConsumer : BackgroundService
                 if (salesOrder != null)
                 {
                     _logger.LogInformation(
-                        "📦 ORDER RECEIVED! OrderId: {OrderId}, CustomerId: {CustomerId}, Amount: {Amount}",
+                        "ðŸ“¦ ORDER RECEIVED! OrderId: {OrderId}, CustomerId: {CustomerId}, Amount: {Amount}",
                         salesOrder.OrderId,
                         salesOrder.CustomerId,
                         salesOrder.TotalAmount);
@@ -73,7 +73,7 @@ public class SalesOrderEventConsumer : BackgroundService
                     // - Update inventory stock
                     // - Send confirmation email
                     
-                    _logger.LogInformation("✅ Order {OrderId} processed successfully!", salesOrder.OrderId);
+                    _logger.LogInformation("âœ… Order {OrderId} processed successfully!", salesOrder.OrderId);
                 }
                 
                 // Success - Acknowledge the message
@@ -81,7 +81,7 @@ public class SalesOrderEventConsumer : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error processing order");
+                _logger.LogError(ex, "âŒ Error processing order");
                 // Send to dead letter (requeue: false)
                 await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false);
             }
@@ -93,7 +93,7 @@ public class SalesOrderEventConsumer : BackgroundService
             autoAck: false, 
             consumer: consumer);
 
-        _logger.LogInformation("🎧 Event Consumer started...");
+        _logger.LogInformation("ðŸŽ§ Event Consumer started...");
 
 
         // 10. Keep running until app stopped
