@@ -29,6 +29,8 @@ const PO_STATUS_COLORS = {
 const WODashboard = () => {
     const [poList, setPOList] = useState([]);
     const [expandedPO, setExpandedPO] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
     const { loading, requestHandlerFunction } = useApi();
 
     const fetchDashboard = useCallback(async () => {
@@ -47,7 +49,18 @@ const WODashboard = () => {
         setExpandedPO(prev => prev === poId ? null : poId);
     };
 
-    // Summary stats
+    // Client-side filtering — PO level
+    const filteredPOList = poList.filter(po => {
+        const s = searchTerm.toLowerCase();
+        const matchesSearch = !searchTerm
+            || (po.orderNumber || '').toLowerCase().includes(s)
+            || (po.productName || '').toLowerCase().includes(s)
+            || (po.productCode || '').toLowerCase().includes(s);
+        const matchesStatus = statusFilter === 'All' || po.poStatus === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
+    // Summary stats (from full list, not filtered)
     const totalPOs = poList.length;
     const allSteps = poList.flatMap(po => (po.routes || []).flatMap(r => r.steps || []));
     const totalSteps = allSteps.length;
@@ -82,21 +95,73 @@ const WODashboard = () => {
                 </div>
             </div>
 
+            {/* Search + Status Filter */}
+            <div className="flex flex-col sm:flex-row gap-3">
+                {/* Search Input */}
+                <div className="relative flex-1 max-w-sm">
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        placeholder="Search by PO#, Product..."
+                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                    <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+                    {searchTerm && (
+                        <button onClick={() => setSearchTerm('')}
+                            className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs">
+                            ✕
+                        </button>
+                    )}
+                </div>
+
+                {/* Status Dropdown */}
+                <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 min-w-[150px]"
+                >
+                    <option value="All">All PO Status</option>
+                    <option value="Created">Created</option>
+                    <option value="Released">Released</option>
+                    <option value="InProgress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+
+                {/* Result count */}
+                <div className="flex items-center text-sm text-slate-500">
+                    Showing <span className="font-bold text-slate-700 mx-1">{filteredPOList.length}</span> of {poList.length} POs
+                </div>
+
+                {/* Clear button */}
+                {(searchTerm || statusFilter !== 'All') && (
+                    <button
+                        onClick={() => { setSearchTerm(''); setStatusFilter('All'); }}
+                        className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50"
+                    >
+                        Clear Filters
+                    </button>
+                )}
+            </div>
+
             {/* Loading */}
             {loading && poList.length === 0 && (
                 <div className="text-center py-12 text-slate-400">Loading work order data...</div>
             )}
 
             {/* Empty */}
-            {!loading && poList.length === 0 && (
+            {!loading && filteredPOList.length === 0 && (
                 <div className="bg-white p-8 rounded-lg shadow text-center text-gray-500">
-                    No active production orders with work order data.
+                    {poList.length === 0
+                        ? 'No active production orders with work order data.'
+                        : 'No orders match your search/filter.'}
                 </div>
             )}
 
             {/* PO Cards with expandable steps */}
             <div className="space-y-3">
-                {poList.map((po) => {
+                {filteredPOList.map((po) => {
                     const isExpanded = expandedPO === po.productionOrderId;
                     const poSteps = (po.routes || []).flatMap(r => r.steps || []);
                     const overallProgress = poSteps.length > 0

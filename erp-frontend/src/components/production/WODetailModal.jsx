@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Clock, CheckCircle, AlertTriangle, Zap } from 'lucide-react';
+import { X, Clock, CheckCircle, AlertTriangle, Zap, Layers, ArrowRight } from 'lucide-react';
 
 const STATUS_COLORS = {
     Pending: 'bg-yellow-100 text-yellow-700',
@@ -40,10 +40,33 @@ const WODetailModal = ({ workOrder, onClose }) => {
                             </span>
                         </InfoCard>
                         <InfoCard label="Product" value={`${workOrder.productName} (${workOrder.productCode})`} />
-                        <InfoCard label="Step" value={`#${workOrder.stepNumber} — ${workOrder.operationName}`} />
-                        <InfoCard label="Process" value={workOrder.processCode || '-'} />
-                        <InfoCard label="Work Center" value={workOrder.workCenterName ? `${workOrder.workCenterName} (${workOrder.workCenterCode})` : '-'} />
-                        <InfoCard label="Route" value={workOrder.routeCode ? `${workOrder.routeCode} v${workOrder.routeVersion}` : '-'} />
+
+                        {workOrder.stepNumber === 0 ? (
+                            // ── Entire Route WO ─────────────────────────────────────
+                            <div className="col-span-2 md:col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                                        <Layers size={12} /> Entire Route WO
+                                    </span>
+                                    <span className="text-xs text-slate-500">Work Center Level Tracking</span>
+                                </div>
+                                <p className="text-xs text-slate-600">
+                                    <span className="font-semibold">Route:</span> {workOrder.routeCode} v{workOrder.routeVersion}
+                                    {workOrder.workCenterName && <> &nbsp;|&nbsp; <span className="font-semibold">🏭</span> {workOrder.workCenterName}</>}
+                                </p>
+                                <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">
+                                    💡 <strong>Output = Last step ka final quantity.</strong> Intermediate steps tracked internally.
+                                </p>
+                            </div>
+                        ) : (
+                            // ── Individual Step WO ──────────────────────────────────
+                            <>
+                                <InfoCard label="Step" value={`#${workOrder.stepNumber} — ${workOrder.operationName}`} />
+                                <InfoCard label="Process" value={workOrder.processCode || '-'} />
+                                <InfoCard label="Work Center" value={workOrder.workCenterName ? `${workOrder.workCenterName} (${workOrder.workCenterCode})` : '-'} />
+                                <InfoCard label="Route" value={workOrder.routeCode ? `${workOrder.routeCode} v${workOrder.routeVersion}` : '-'} />
+                            </>
+                        )}
                     </div>
 
                     {/* Quantity Section */}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Play, ShoppingCart, Package, Clock } from 'lucide-react';
+import { Play, ShoppingCart, Package, Clock, Search, X } from 'lucide-react';
 import PlanningModal from '../../components/production/PlanningModal';
 import useApi from '../../hooks/useApi';
 import { 
@@ -22,6 +22,8 @@ const Dashboard = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [planningData, setPlanningData] = useState(null);
     const [selectedOrderId, setSelectedOrderId] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
 
     const { loading: isLoading, requestHandlerFunction } = useApi();
 
@@ -89,8 +91,22 @@ const Dashboard = () => {
     };
 
     // Summary counts
-    const pendingCount = orders.filter(o => o.status === 'Pending').length;
-    const totalItems = orders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
+    const pendingCount  = orders.filter(o => o.status === 'Pending').length;
+    const approvedCount = orders.filter(o => o.status === 'Approved').length;
+    const totalItems    = orders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
+
+    // Client-side search + status filter
+    const filteredOrders = orders.filter(o => {
+        const s = searchTerm.toLowerCase();
+        const matchesSearch = !searchTerm
+            || (o.salesOrderNumber || '').toLowerCase().includes(s)
+            || (o.customerName    || '').toLowerCase().includes(s)
+            || (o.items || []).some(i => (i.productName || '').toLowerCase().includes(s));
+        const matchesStatus = statusFilter === 'All' || o.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
+    const hasFilters = searchTerm || statusFilter !== 'All';
 
     if (isLoading && orders.length === 0) 
         return <div className="p-8 text-center text-blue-600">Loading Dashboard...</div>;
@@ -107,7 +123,7 @@ const Dashboard = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
                     <p className="text-xs text-slate-400 uppercase font-medium">Total Requests</p>
                     <p className="text-3xl font-bold text-slate-800 mt-1">{orders.length}</p>
@@ -116,13 +132,66 @@ const Dashboard = () => {
                     <p className="text-xs text-yellow-600 uppercase font-medium">Pending</p>
                     <p className="text-3xl font-bold text-yellow-700 mt-1">{pendingCount}</p>
                 </div>
+                <div className="bg-green-50 rounded-xl border border-green-200 p-4">
+                    <p className="text-xs text-green-600 uppercase font-medium">Approved</p>
+                    <p className="text-3xl font-bold text-green-700 mt-1">{approvedCount}</p>
+                </div>
                 <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
                     <p className="text-xs text-blue-600 uppercase font-medium">Total Line Items</p>
                     <p className="text-3xl font-bold text-blue-700 mt-1">{totalItems}</p>
                 </div>
             </div>
 
-            {/* Empty State */}
+            {/* Search + Filter Bar */}
+            <div className="flex flex-wrap gap-3 items-center">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[220px] max-w-md">
+                    <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        placeholder="Search SO#, customer, product..."
+                        className="w-full pl-8 pr-8 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    {searchTerm && (
+                        <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+                            <X size={13} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Status Filter */}
+                <div className="flex gap-1.5">
+                    {['All', 'Pending', 'Approved', 'Cancelled'].map(s => (
+                        <button key={s} onClick={() => setStatusFilter(s)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                statusFilter === s
+                                    ? s === 'Pending'   ? 'bg-yellow-500 text-white border-yellow-500'
+                                    : s === 'Approved'  ? 'bg-green-500 text-white border-green-500'
+                                    : s === 'Cancelled' ? 'bg-red-500 text-white border-red-500'
+                                    : 'bg-slate-800 text-white border-slate-800'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                            }`}>
+                            {s}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Result count */}
+                <span className="text-sm text-slate-500 ml-1">
+                    Showing <span className="font-semibold text-slate-700">{filteredOrders.length}</span> of {orders.length}
+                </span>
+
+                {hasFilters && (
+                    <button onClick={() => { setSearchTerm(''); setStatusFilter('All'); }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50">
+                        <X size={11} /> Clear
+                    </button>
+                )}
+            </div>
+
+            {/* Empty State — no data at all */}
             {orders.length === 0 && !isLoading && (
                 <div className="bg-white p-8 rounded-lg shadow text-center text-gray-500">
                     No pending orders found. Good job! 🎉
@@ -132,7 +201,12 @@ const Dashboard = () => {
             {/* Orders Table */}
             {orders.length > 0 && (
                 <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-                    <table className="w-full text-left border-collapse text-sm">
+                    {filteredOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400">
+                            No orders match your search/filter.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse text-sm">
                         <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-semibold">
                             <tr>
                                 <th className="p-4 border-b">SO #</th>
@@ -144,7 +218,7 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {orders.map((order, index) => (
+                            {filteredOrders.map((order, index) => (
                                 <tr key={order.id || index} className="hover:bg-slate-50 transition-colors">
                                     <td className="p-4">
                                         <span className="font-mono font-semibold text-slate-800">
@@ -189,6 +263,7 @@ const Dashboard = () => {
                             ))}
                         </tbody>
                     </table>
+                    )}
                 </div>
             )}
             

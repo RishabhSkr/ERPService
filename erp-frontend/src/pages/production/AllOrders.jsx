@@ -8,6 +8,7 @@ import { Factory, Eye } from 'lucide-react';
 const Production = () => {
     const [orders, setOrders] = useState([]);
     const [filterId, setFilterId] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
     const [selectedOrder, setSelectedOrder] = useState(null);
     const[currentPage,setCurrentPage] = useState(1);
     const pageSize = 10;
@@ -34,18 +35,23 @@ const Production = () => {
         loadOrders();
     }, [fetchOrders]);
     
-    // FIX: null-safe filter — salesOrderId can be null
+    // Combined filter: text search + status dropdown
     const filteredOrders = orders.filter(order => {
-        if (!filterId) return true;
         const search = filterId.toLowerCase();
-        return (order.orderNumber || '').toLowerCase().includes(search) 
+        const matchesSearch = !filterId
+            || (order.orderNumber || '').toLowerCase().includes(search)
             || (order.salesOrderNumber || '').toLowerCase().includes(search)
-            || (order.productName || '').toLowerCase().includes(search);
+            || (order.productName || '').toLowerCase().includes(search)
+            || (order.productCode || '').toLowerCase().includes(search);
+        const matchesStatus = statusFilter === 'All'
+            || (order.status || '').toLowerCase() === statusFilter.toLowerCase();
+        return matchesSearch && matchesStatus;
     });
 
     const handleClear = () => {
-        setFilterId(''); 
-        fetchOrders(null); 
+        setFilterId('');
+        setStatusFilter('All');
+        fetchOrders(null);
     };
 
     const getStatusColor = (status) => {
@@ -76,18 +82,33 @@ const Production = () => {
                     Production Orders List
                 </h1>
                 
-                <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row gap-3 items-center w-full md:w-auto">
                     <FilterBar
-                        value={filterId}           
-                        onChange={setFilterId}     
+                        value={filterId}
+                        onChange={setFilterId}
                         onSearch={() => {}}
                         onClear={handleClear}
-                        placeholder="Search by PO# or Product"
+                        placeholder="Search by PO#, Product..."
                         type="text"
                     />
 
+                    {/* Status Filter Dropdown */}
+                    <select
+                        value={statusFilter}
+                        onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-[140px]"
+                    >
+                        <option value="All">All Status</option>
+                        <option value="Created">Created</option>
+                        <option value="Released">Released</option>
+                        <option value="InProgress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+
                     <div className="text-sm text-gray-500 whitespace-nowrap">
-                        Total Orders: <span className="font-bold text-gray-800">{orders.length}</span>
+                        <span className="font-bold text-gray-800">{filteredOrders.length}</span>
+                        <span className="text-gray-400"> / {orders.length}</span>
                     </div>
                 </div>
             </div>

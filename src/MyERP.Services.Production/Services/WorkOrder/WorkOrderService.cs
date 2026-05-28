@@ -324,9 +324,10 @@ namespace MyERP.Services.Production.Services.WorkOrder
         // ====================================================================
         public async Task<IEnumerable<WorkOrderDashboardDto>> GetDashboardAsync()
         {
-            var releasedPOs = await _poRepository.GetByStatusAsync(ProductionOrderStatus.Released);
+            var releasedPOs   = await _poRepository.GetByStatusAsync(ProductionOrderStatus.Released);
             var inProgressPOs = await _poRepository.GetByStatusAsync(ProductionOrderStatus.InProgress);
-            var allPOs = releasedPOs.Concat(inProgressPOs).ToList();
+            var completedPOs  = await _poRepository.GetByStatusAsync(ProductionOrderStatus.Completed);
+            var allPOs = releasedPOs.Concat(inProgressPOs).Concat(completedPOs).ToList();
 
             var dashboard = new List<WorkOrderDashboardDto>();
 
@@ -344,9 +345,20 @@ namespace MyERP.Services.Production.Services.WorkOrder
                 {
                     var steps = new List<StepSummaryDto>();
 
+                    // Route-level WOs for this route (1 WO for all steps, ProcessRouteStepId == null)
+                    var routeLevelWOs = woList
+                        .Where(w => w.ProcessRouteStepId == null && w.RouteCode == route.RouteCode)
+                        .ToList();
+                    bool hasRouteLevelWO = routeLevelWOs.Any();
+
                     foreach (var step in route.Steps.OrderBy(s => s.StepNumber))
                     {
-                        var stepWOs = woList.Where(w => w.ProcessRouteStepId == step.ProcessRouteStepId).ToList();
+                        // Route-level WO: apply to ALL steps for display (data carried through all steps)
+                        // Per-step WO: match by ProcessRouteStepId as normal
+                        var stepWOs = hasRouteLevelWO
+                            ? routeLevelWOs
+                            : woList.Where(w => w.ProcessRouteStepId == step.ProcessRouteStepId).ToList();
+
                         var notCancelled = stepWOs.Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
 
                         var completed = notCancelled.Sum(w => w.QuantityCompleted);
@@ -1086,76 +1098,133 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
             // Only consider non-cancelled WOs
             var nonCancelled = woList.Where(w => w.Status != WorkOrderStatus.Cancelled).ToList();
-
-            // If no non-cancelled WOs exist, nothing to do
             if (nonCancelled.Count == 0) return;
 
-            // Check if ALL non-cancelled WOs are Completed
-            var allCompleted = nonCancelled.All(w => w.Status == WorkOrderStatus.Completed);
-            if (!allCompleted) return;
+            // All non-cancelled WOs must be Completed first
+            if (!nonCancelled.All(w => w.Status == WorkOrderStatus.Completed)) return;
 
-            // ─── GUARD: Check all process route steps have WOs ───
             var po = await _poRepository.GetByIdWithDetailsAsync(productionOrderId);
             if (po == null || po.Status == ProductionOrderStatus.Completed) return;
 
-            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
-            if (route != null && route.Steps.Any())
-            {
-                var requiredStepCount = route.Steps.Count;
-                var coveredProcessIds = nonCancelled
-                    .Select(w => w.ProcessId)
-                    .Distinct()
-                    .ToList();
+            var allRoutes = await _routeRepository.GetAllActiveByProductIdAsync(po.ProductId);
 
-                if (coveredProcessIds.Count < requiredStepCount)
+            // ── Detect WO mode ──────────────────────────────────────────────────────
+            // Route-level WO: ProcessRouteStepId == null (1 WO for all steps)
+            // Per-step WO:    ProcessRouteStepId != null (1 WO per step)
+            bool hasRouteLevelWOs = nonCancelled.Any(w => w.ProcessRouteStepId == null);
+
+            if (hasRouteLevelWOs)
+            {
+                // ── ROUTE-LEVEL WO MODE ─────────────────────────────────────────────
+                // Every active route must have a completed route-level WO
+                if (allRoutes != null && allRoutes.Count > 0)
                 {
-                    _logger.LogInformation(
-                        "PO {PONumber}: {Completed}/{Total} process steps have WOs — NOT auto-completing yet",
-                        po.OrderNumber, coveredProcessIds.Count, requiredStepCount);
-                    return;
+                    foreach (var route in allRoutes)
+                    {
+                        var routeWODone = nonCancelled.Any(w =>
+                            w.ProcessRouteStepId == null &&
+                            w.RouteCode == route.RouteCode &&
+                            w.Status == WorkOrderStatus.Completed);
+
+                        if (!routeWODone)
+                        {
+                            _logger.LogInformation(
+                                "PO {PONumber}: Route '{RouteCode}' has no completed route-level WO — NOT auto-completing",
+                                po.OrderNumber, route.RouteCode);
+                            return;
+                        }
+                    }
                 }
-            }
-
-            // All WOs done + all process steps covered → auto-complete PO
-            // ─── Calculate PO quantities from LAST step (final product output) ───
-            decimal poGood = 0;
-            decimal poScrap = 0;
-
-            if (route != null && route.Steps.Any())
-            {
-                var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).First();
-                var lastStepWOs = nonCancelled
-                    .Where(w => w.ProcessRouteStepId == lastStep.ProcessRouteStepId)
-                    .ToList();
-
-                var multiplier = lastStep.OutputMultiplier > 0 ? lastStep.OutputMultiplier : 1;
-                poGood = Math.Round(lastStepWOs.Sum(w => w.QuantityCompleted) / multiplier, 2);
-                poScrap = Math.Round(lastStepWOs.Sum(w => w.QuantityScrap) / multiplier, 2);
-
-                _logger.LogInformation(
-                    "PO qty from last step #{Step} ({Process}): WO Good={WoGood}, WO Scrap={WoScrap}, Multiplier={Mult} → PO Good={PoGood}, Scrap={PoScrap}",
-                    lastStep.StepNumber, lastStep.Process?.ProcessName,
-                    lastStepWOs.Sum(w => w.QuantityCompleted), lastStepWOs.Sum(w => w.QuantityScrap),
-                    multiplier, poGood, poScrap);
             }
             else
             {
-                // Fallback: no route, just sum all WOs (shouldn't happen normally)
-                poGood = nonCancelled.Sum(w => w.QuantityCompleted);
-                poScrap = nonCancelled.Sum(w => w.QuantityScrap);
+                // ── PER-STEP WO MODE ────────────────────────────────────────────────
+                // Every step of EVERY active route must have at least one completed WO
+                if (allRoutes != null && allRoutes.Count > 0)
+                {
+                    foreach (var route in allRoutes)
+                    {
+                        var requiredStepIds = route.Steps
+                            .Select(s => s.ProcessRouteStepId)
+                            .ToHashSet();
+
+                        var coveredStepIds = nonCancelled
+                            .Where(w => w.ProcessRouteStepId.HasValue)
+                            .Select(w => w.ProcessRouteStepId!.Value)
+                            .Distinct()
+                            .ToHashSet();
+
+                        if (!requiredStepIds.All(id => coveredStepIds.Contains(id)))
+                        {
+                            _logger.LogInformation(
+                                "PO {PONumber}: Route '{RouteCode}' — not all steps have WOs — NOT auto-completing",
+                                po.OrderNumber, route.RouteCode);
+                            return;
+                        }
+                    }
+                }
             }
 
-            po.Status = ProductionOrderStatus.Completed;
-            po.QuantityGood = poGood;
+            // ── Calculate PO output quantities ──────────────────────────────────────
+            decimal poGood = 0;
+            decimal poScrap = 0;
+
+            if (hasRouteLevelWOs)
+            {
+                // Route-level mode: each route-level WO's output = that route's final output
+                if (allRoutes != null)
+                {
+                    foreach (var route in allRoutes)
+                    {
+                        var routeWOs = nonCancelled
+                            .Where(w => w.ProcessRouteStepId == null && w.RouteCode == route.RouteCode)
+                            .ToList();
+                        var lastStep = route.Steps.OrderByDescending(s => s.StepNumber).FirstOrDefault();
+                        var multiplier = (lastStep?.OutputMultiplier ?? 1m) > 0 ? (lastStep?.OutputMultiplier ?? 1m) : 1m;
+                        poGood  += Math.Round(routeWOs.Sum(w => w.QuantityCompleted) / multiplier, 2);
+                        poScrap += Math.Round(routeWOs.Sum(w => w.QuantityScrap)     / multiplier, 2);
+                    }
+                }
+            }
+            else
+            {
+                // Per-step mode: use last step of primary route for final output
+                var primaryRoute = allRoutes?.FirstOrDefault();
+                if (primaryRoute != null && primaryRoute.Steps.Any())
+                {
+                    var lastStep = primaryRoute.Steps.OrderByDescending(s => s.StepNumber).First();
+                    var lastStepWOs = nonCancelled
+                        .Where(w => w.ProcessRouteStepId == lastStep.ProcessRouteStepId)
+                        .ToList();
+                    var multiplier = lastStep.OutputMultiplier > 0 ? lastStep.OutputMultiplier : 1m;
+                    poGood  = Math.Round(lastStepWOs.Sum(w => w.QuantityCompleted) / multiplier, 2);
+                    poScrap = Math.Round(lastStepWOs.Sum(w => w.QuantityScrap)     / multiplier, 2);
+
+                    _logger.LogInformation(
+                        "PO qty from last step #{Step} ({Process}): Good={WoGood}, Scrap={WoScrap}, Mult={Mult} → PO Good={PoGood}, Scrap={PoScrap}",
+                        lastStep.StepNumber, lastStep.Process?.ProcessName,
+                        lastStepWOs.Sum(w => w.QuantityCompleted), lastStepWOs.Sum(w => w.QuantityScrap),
+                        multiplier, poGood, poScrap);
+                }
+                else
+                {
+                    poGood  = nonCancelled.Sum(w => w.QuantityCompleted);
+                    poScrap = nonCancelled.Sum(w => w.QuantityScrap);
+                }
+            }
+
+            po.Status        = ProductionOrderStatus.Completed;
+            po.QuantityGood  = poGood;
             po.QuantityScrap = poScrap;
             po.ActualEndDate = DateTime.UtcNow;
-            po.UpdatedAt = DateTime.UtcNow;
+            po.UpdatedAt     = DateTime.UtcNow;
 
             await _poRepository.UpdateAsync(po);
 
             _logger.LogInformation(
-                "PO {PONumber} auto-completed: All {WOCount} WOs finished. Good={Good}, Scrap={Scrap}",
-                po.OrderNumber, nonCancelled.Count, po.QuantityGood, po.QuantityScrap);
+                "PO {PONumber} auto-completed ({Mode}): {WOCount} WOs done. Good={Good}, Scrap={Scrap}",
+                po.OrderNumber, hasRouteLevelWOs ? "Route-level" : "Per-step",
+                nonCancelled.Count, po.QuantityGood, po.QuantityScrap);
         }
     }
 }

@@ -36,10 +36,17 @@ namespace MyERP.Services.Inventory.Repositories.Inventory
                 query = query.Where(m => m.MovementType == movementType.ToUpper());
 
             if (startDate.HasValue)
-                query = query.Where(m => m.CreatedAt >= startDate.Value);
+            {
+                var start = DateTime.SpecifyKind(startDate.Value.Date, DateTimeKind.Utc);
+                query = query.Where(m => m.CreatedAt >= start);
+            }
 
             if (endDate.HasValue)
-                query = query.Where(m => m.CreatedAt <= endDate.Value);
+            {
+                // End of day = next day 00:00:00 UTC (exclusive) — handles full-day range
+                var end = DateTime.SpecifyKind(endDate.Value.Date.AddDays(1), DateTimeKind.Utc);
+                query = query.Where(m => m.CreatedAt < end);
+            }
 
             var totalCount = await query.CountAsync();
 
