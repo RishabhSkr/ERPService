@@ -229,52 +229,25 @@ namespace MyERP.Services.Production.Services.WorkOrder
 
             if (wasReserved)
             {
-                // SAGA: Return reserved materials to Inventory
-                var po = await _poRepository.GetByIdWithDetailsAsync(wo.ProductionOrderId);
-                if (po != null)
+                // ═══ SAGA Compensating Action: Release reserved materials ═══
+                // Consumer (HandleWorkOrderReturn) uses WorkOrderId to find RESERVE
+                // movements and releases them — BOM lookup not needed here.
+                var po = await _poRepository.GetByIdAsync(wo.ProductionOrderId);
+
+                var returnEvent = new MaterialReturnRequestedEvent
                 {
-                    // 1. Get BOM lines mapped to this process
-                    var bom = await _bomRepository.GetByIdWithLinesAsync(po.BOMId);
-                    if (bom != null)
-                    {
-                        var processMaterialIds = bom.Lines
-                            .Where(l => l.ProcessId == wo.ProcessId)
-                            .Select(l => l.RawMaterialId)
-                            .ToList();
+                    ProductionOrderId  = wo.ProductionOrderId,
+                    ProductionOrderNumber = po?.OrderNumber ?? wo.WorkOrderNumber,
+                    WorkOrderId        = wo.WorkOrderId,
+                    WorkOrderNumber    = wo.WorkOrderNumber,
+                    MaterialsConsumed  = new List<MaterialConsumed>() // Consumer finds reserves by WorkOrderId
+                };
 
-                        var routeStep = wo.ProcessRouteStep;
-                        if (routeStep == null && wo.ProcessRouteStepId.HasValue)
-                        {
-                            var route = await _routeRepository.GetActiveByProductIdAsync(po.ProductId);
-                            routeStep = route?.Steps.FirstOrDefault(s => s.ProcessRouteStepId == wo.ProcessRouteStepId);
-                        }
-                        var outputMultiplier = routeStep?.OutputMultiplier ?? 1.0m;
-                        var targetQtyForPO = po.QuantityPlanned * outputMultiplier;
+                await _eventPublisher.PublishAsync(returnEvent);
 
-                        var returnEvent = new MaterialReturnRequestedEvent
-                        {
-                            ProductionOrderId = po.Id,
-                            ProductionOrderNumber = po.OrderNumber,
-                            WorkOrderId = wo.WorkOrderId,
-                            WorkOrderNumber = wo.WorkOrderNumber,
-                            MaterialsConsumed = po.MaterialRequirements
-                                .Where(m => processMaterialIds.Contains(m.RawMaterialId))
-                                .Select(m => new MaterialConsumed
-                                {
-                                    RawMaterialId = m.RawMaterialId,
-                                    MaterialCode = m.MaterialCode,
-                                    QuantityConsumed = 0,
-                                    QuantityReturned = targetQtyForPO > 0
-                                        ? (m.QuantityRequired / targetQtyForPO) * wo.QuantityPlanned
-                                        : 0,
-                                    Unit = m.Unit
-                                }).ToList()
-                        };
-                        await _eventPublisher.PublishAsync(returnEvent);
-                    }
-                }
-
-                _logger.LogInformation("WO {WONumber} cancelled — materials returned", wo.WorkOrderNumber);
+                _logger.LogInformation(
+                    "WO {WONumber} cancelled — MaterialReturnRequestedEvent published (SAGA: unreserve)",
+                    wo.WorkOrderNumber);
             }
 
             _logger.LogInformation("Cancelled WO {WONumber}: {Reason}", wo.WorkOrderNumber, reason);

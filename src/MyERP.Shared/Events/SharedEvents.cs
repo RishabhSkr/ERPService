@@ -194,4 +194,28 @@ namespace MyERP.Shared.Events
         public Guid RawMaterialId { get; set; }
         public decimal QuantityReserved { get; set; }
     }
+
+    /// <summary>
+    /// Published by Inventory after releasing reserved stock (WO/PO cancelled).
+    /// Consumed by Production to decrement MaterialRequirements.QuantityReserved.
+    /// </summary>
+    public class StockReleasedEvent
+    {
+        public Guid EventId { get; set; } = Guid.NewGuid();
+        public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
+
+        public Guid ProductionOrderId { get; set; }
+        public string ProductionOrderNumber { get; set; } = string.Empty;
+
+        public Guid? WorkOrderId { get; set; }
+        public string? WorkOrderNumber { get; set; }
+
+        public List<ReleasedMaterial> ReleasedMaterials { get; set; } = new();
+    }
+
+    public class ReleasedMaterial
+    {
+        public Guid RawMaterialId { get; set; }
+        public decimal QuantityReleased { get; set; }
+    }
 }

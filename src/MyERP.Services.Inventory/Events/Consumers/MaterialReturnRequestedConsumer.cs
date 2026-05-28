@@ -16,15 +16,18 @@ public class MaterialReturnRequestedConsumer : IConsumer<MaterialReturnRequested
 {
     private readonly InventoryDbContext _context;
     private readonly IStockMovementService _stockMovementService;
+    private readonly IPublishEndpoint _publishEndpoint;
     private readonly ILogger<MaterialReturnRequestedConsumer> _logger;
 
     public MaterialReturnRequestedConsumer(
         InventoryDbContext context,
         IStockMovementService stockMovementService,
+        IPublishEndpoint publishEndpoint,
         ILogger<MaterialReturnRequestedConsumer> logger)
     {
         _context = context;
         _stockMovementService = stockMovementService;
+        _publishEndpoint = publishEndpoint;
         _logger = logger;
     }
 
@@ -86,6 +89,28 @@ public class MaterialReturnRequestedConsumer : IConsumer<MaterialReturnRequested
             _logger.LogInformation("Released {Qty} of Item {ItemId} for WO {WONumber}",
                 reservation.Quantity, reservation.ItemId, @event.WorkOrderNumber);
         }
+
+        // ── SAGA: Notify Production to decrement QuantityReserved ──────────
+        var releasedMaterials = reservations
+            .GroupBy(r => r.ItemId)
+            .Select(g => new ReleasedMaterial
+            {
+                RawMaterialId   = g.Key,
+                QuantityReleased = g.Sum(r => r.Quantity)
+            }).ToList();
+
+        await _publishEndpoint.Publish(new StockReleasedEvent
+        {
+            ProductionOrderId     = @event.ProductionOrderId,
+            ProductionOrderNumber = @event.ProductionOrderNumber,
+            WorkOrderId           = @event.WorkOrderId,
+            WorkOrderNumber       = @event.WorkOrderNumber,
+            ReleasedMaterials     = releasedMaterials
+        });
+
+        _logger.LogInformation(
+            "StockReleasedEvent published for WO {WONumber} — {Count} materials released",
+            @event.WorkOrderNumber, releasedMaterials.Count);
     }
 
     // PO-level: original logic (kept for backward compatibility)

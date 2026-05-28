@@ -184,6 +184,7 @@ builder.Services.AddMassTransit(x =>
         .Endpoint(e => e.Name = "sales-order-created");  // Explicit queue name
     
     x.AddConsumer<StockReservedConsumer>();
+    x.AddConsumer<StockReleasedConsumer>();   // SAGA return: decrement QuantityReserved on WO cancel
     x.AddConsumer<SalesOrderCancelledConsumer>()
     .Endpoint(e => e.Name = "sales-order-cancelled");
     
